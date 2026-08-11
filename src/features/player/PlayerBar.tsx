@@ -1,16 +1,25 @@
 import { usePlayer } from "./PlayerContext";
-import { formatDuration } from "../../lib/subsonic/client";
 import { Cover } from "../library/Cover";
-
-function formatMs(ms: number): string {
-  return formatDuration(Math.floor(ms / 1000));
-}
+import {
+  IconMore,
+  IconNext,
+  IconPause,
+  IconPlay,
+  IconPrev,
+  IconQueue,
+  IconRepeat,
+  IconRepeatOne,
+  IconShuffle,
+  IconSpeaker,
+  IconStar,
+} from "./icons";
 
 export function PlayerBar() {
   const {
     current,
     playing,
     shuffle,
+    repeat,
     queuePanelOpen,
     positionMs,
     durationMs,
@@ -21,89 +30,89 @@ export function PlayerBar() {
     seek,
     setVolume,
     toggleShuffle,
+    cycleRepeat,
     toggleQueuePanel,
   } = usePlayer();
 
+  const progress = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
+  const subtitle = [current?.artist, current?.album].filter(Boolean).join(" - ");
+
   return (
-    <footer className="player-bar">
-      <div className="now-playing">
-        {current?.coverUrl ? (
-          <Cover src={current.coverUrl} className="now-cover" alt="" />
-        ) : (
-          <div className="cover-fallback now-cover" />
-        )}
-        <div className="text">
-          <div className="title">{current?.title ?? "Nothing playing"}</div>
-          <div className="artist">{current?.artist ?? "Select a track to start"}</div>
-        </div>
+    <header className="player-bar am-bar">
+      <div className="transport-controls">
+        <button
+          className={`icon-btn ghost${shuffle ? " active" : ""}`}
+          type="button"
+          onClick={toggleShuffle}
+          aria-label="Shuffle"
+          title="Shuffle"
+        >
+          <IconShuffle size={16} />
+        </button>
+        <button className="icon-btn ghost" type="button" onClick={prev} aria-label="Previous">
+          <IconPrev size={17} />
+        </button>
+        <button
+          className="icon-btn play"
+          type="button"
+          onClick={toggle}
+          aria-label={playing ? "Pause" : "Play"}
+          disabled={!current}
+        >
+          {playing ? <IconPause size={16} /> : <IconPlay size={16} />}
+        </button>
+        <button className="icon-btn ghost" type="button" onClick={next} aria-label="Next">
+          <IconNext size={17} />
+        </button>
+        <button
+          className={`icon-btn ghost${repeat !== "off" ? " active" : ""}`}
+          type="button"
+          onClick={cycleRepeat}
+          aria-label={`Repeat ${repeat}`}
+          title={repeat === "off" ? "Repeat Off" : repeat === "all" ? "Repeat All" : "Repeat One"}
+        >
+          {repeat === "one" ? <IconRepeatOne size={16} /> : <IconRepeat size={16} />}
+        </button>
       </div>
 
-      <div className="transport">
-        <div className="transport-controls">
-          <button
-            className={`icon-btn${shuffle ? " active" : ""}`}
-            type="button"
-            onClick={toggleShuffle}
-            aria-label="Shuffle"
-            title="Shuffle"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path
-                d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-          <button className="icon-btn" type="button" onClick={prev} aria-label="Previous">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M6 6h2v12H6V6zm3.5 6l8.5 6V6l-8.5 6z" />
-            </svg>
-          </button>
-          <button
-            className="icon-btn primary"
-            type="button"
-            onClick={toggle}
-            aria-label={playing ? "Pause" : "Play"}
-            disabled={!current}
-          >
-            {playing ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <path d="M6 5h4v14H6V5zm8 0h4v14h-4V5z" />
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <path d="M8 5v14l11-7L8 5z" />
-              </svg>
-            )}
-          </button>
-          <button className="icon-btn" type="button" onClick={next} aria-label="Next">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M16 6h2v12h-2V6zM6 18l8.5-6L6 6v12z" />
-            </svg>
+      <div className="now-module">
+        <div className="now-module-body">
+          {current?.coverUrl ? (
+            <Cover src={current.coverUrl} className="now-cover" alt="" />
+          ) : (
+            <div className="cover-fallback now-cover" />
+          )}
+          <div className="now-module-text">
+            <div className="now-title-row">
+              <span className="title">{current?.title ?? "Wicked Music"}</span>
+              <button type="button" className="icon-btn tiny" aria-label="More" title="More">
+                <IconMore size={14} />
+              </button>
+            </div>
+            <div className="artist">{subtitle || "Nothing playing"}</div>
+          </div>
+          <button type="button" className="icon-btn tiny star" aria-label="Favorite" title="Favorite">
+            <IconStar size={15} />
           </button>
         </div>
-        <div className="seek">
-          <span>{formatMs(positionMs)}</span>
+        <div className="now-progress">
           <input
             type="range"
+            className="progress-range"
             min={0}
             max={Math.max(durationMs, 1)}
             value={Math.min(positionMs, durationMs || 0)}
             disabled={!current}
+            style={{ ["--progress" as string]: `${progress * 100}%` }}
             onChange={(e) => seek(Number(e.target.value))}
+            aria-label="Seek"
           />
-          <span>{formatMs(durationMs)}</span>
         </div>
       </div>
 
       <div className="player-utils">
         <div className="volume">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-            <path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2a3.5 3.5 0 00-1.8-3.1v6.2A3.5 3.5 0 0016.5 12z" />
-          </svg>
+          <IconSpeaker size={15} />
           <input
             type="range"
             min={0}
@@ -115,18 +124,16 @@ export function PlayerBar() {
           />
         </div>
         <button
-          className={`icon-btn queue-toggle${queuePanelOpen ? " active" : ""}`}
+          className={`icon-btn ghost queue-toggle${queuePanelOpen ? " active" : ""}`}
           type="button"
           onClick={toggleQueuePanel}
           aria-label={queuePanelOpen ? "Hide Playing Next" : "Show Playing Next"}
           aria-pressed={queuePanelOpen}
           title="Playing Next"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-            <path d="M4 6h2v2H4V6zm4 0h12v2H8V6zM4 11h2v2H4v-2zm4 0h12v2H8v-2zM4 16h2v2H4v-2zm4 0h12v2H8v-2z" />
-          </svg>
+          <IconQueue size={17} />
         </button>
       </div>
-    </footer>
+    </header>
   );
 }

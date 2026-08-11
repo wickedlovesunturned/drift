@@ -9,6 +9,7 @@ export function ConnectPage() {
     ...settings,
     serverUrl: settings.serverUrl || DEFAULT_SERVER_URL,
     discordFallbackImageKey: settings.discordFallbackImageKey || "app_logo",
+    lastFmApiKey: settings.lastFmApiKey || "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

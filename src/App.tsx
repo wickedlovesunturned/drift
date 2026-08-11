@@ -7,6 +7,7 @@ import { AlbumPage } from "./features/library/AlbumPage";
 import { LibraryPage } from "./features/library/LibraryPage";
 import { PlaylistsPage } from "./features/library/PlaylistsPage";
 import { PlaylistPage } from "./features/library/PlaylistPage";
+import { SearchPage } from "./features/library/SearchPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { useDiscordPresence } from "./features/discord/useDiscordPresence";
 import { APP_NAME } from "./lib/constants";
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="album/:id" element={<AlbumPage />} />
         <Route path="playlists" element={<PlaylistsPage />} />
         <Route path="playlist/:id" element={<PlaylistPage />} />
+        <Route path="search" element={<SearchPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

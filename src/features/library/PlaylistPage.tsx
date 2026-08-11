@@ -43,15 +43,20 @@ export function PlaylistPage() {
 
   const stats = useMemo(() => sumSongStats(playlist?.entry ?? []), [playlist?.entry]);
 
-  async function playFrom(index: number) {
-    if (!playlist?.entry?.length || !auth) return;
-    const tracks: PlayerTrack[] = await Promise.all(
+  async function buildTracks(): Promise<PlayerTrack[]> {
+    if (!playlist?.entry?.length || !auth) return [];
+    return Promise.all(
       playlist.entry.map(async (s) => ({
         ...s,
         coverUrl: (await coverArtUrl(auth, s.coverArt, 300)) ?? cover,
       })),
     );
-    await playTracks(tracks, index);
+  }
+
+  async function playFrom(index: number, shuffle = false) {
+    const tracks = await buildTracks();
+    if (!tracks.length) return;
+    await playTracks(tracks, index, shuffle ? { shuffle: true } : undefined);
   }
 
   if (error) return <p className="error">{error}</p>;
@@ -69,9 +74,18 @@ export function PlaylistPage() {
           <p className="muted" style={{ margin: "0 0 1rem" }}>
             {stats.count} songs
           </p>
-          <button className="btn" type="button" onClick={() => void playFrom(0)}>
-            Play
-          </button>
+          <div className="hero-actions">
+            <button className="btn" type="button" onClick={() => void playFrom(0)}>
+              Play
+            </button>
+            <button
+              className="btn secondary"
+              type="button"
+              onClick={() => void playFrom(0, true)}
+            >
+              Shuffle
+            </button>
+          </div>
         </div>
       </div>
       <ul className="track-list">

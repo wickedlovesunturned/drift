@@ -13,6 +13,7 @@ export function SettingsPage() {
   const { settings, save } = useSettings();
   const [form, setForm] = useState<AppSettings>(settings);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [discord, setDiscord] = useState<DiscordStatus | null>(null);
@@ -20,6 +21,12 @@ export function SettingsPage() {
   useEffect(() => {
     setForm(settings);
   }, [settings]);
+
+  useEffect(() => {
+    void invoke<DiscordStatus>("discord_status")
+      .then(setDiscord)
+      .catch(() => undefined);
+  }, []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -42,6 +49,31 @@ export function SettingsPage() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function onTestDiscord() {
+    setTesting(true);
+    setError(null);
+    setMessage(null);
+    try {
+      // Persist current Discord fields first so the backend uses them.
+      await save({
+        ...form,
+        serverUrl: form.serverUrl.trim() || DEFAULT_SERVER_URL,
+        discordShowListening: true,
+      });
+      const status = await invoke<DiscordStatus>("discord_test");
+      setDiscord(status);
+      setMessage(
+        status.connected
+          ? "Discord connected. Check your Discord profile for a Wicked Music test presence."
+          : "Discord test ran but is not connected.",
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -84,9 +116,11 @@ export function SettingsPage() {
 
           <label className="toggle-row">
             <span>
-              <strong>Show what I’m listening to on Discord</strong>
+              <strong>Show what I am listening to on Discord</strong>
               <div className="muted" style={{ fontSize: "0.85rem", marginTop: 4 }}>
-                Uses Discord’s local RPC while a track is playing.
+                Requires Discord desktop running. Create an Application in the Discord Developer
+                Portal, paste its Client ID below, and upload a Rich Presence art asset named
+                app_logo.
               </div>
             </span>
             <input
@@ -119,6 +153,23 @@ export function SettingsPage() {
             />
           </label>
 
+          <label>
+            Last.fm API key
+            <input
+              type="text"
+              placeholder="For Discord album art (album.getinfo)"
+              value={form.lastFmApiKey}
+              onChange={(e) => setForm({ ...form, lastFmApiKey: e.target.value })}
+            />
+          </label>
+          <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
+            Create an API account at{" "}
+            <a href="https://www.last.fm/api/account/create" target="_blank" rel="noreferrer">
+              last.fm/api
+            </a>{" "}
+            and paste the API key. Discord uses the public Last.fm cover URL.
+          </p>
+
           {discord && (
             <p className="muted" style={{ margin: 0 }}>
               Discord: {discord.connected ? "connected" : "not connected"}
@@ -129,9 +180,19 @@ export function SettingsPage() {
           {error && <p className="error">{error}</p>}
           {message && <p className="muted">{message}</p>}
 
-          <button className="btn" type="submit" disabled={saving}>
-            {saving ? "Saving…" : "Save settings"}
-          </button>
+          <div className="form-actions">
+            <button className="btn" type="submit" disabled={saving}>
+              {saving ? "Saving..." : "Save settings"}
+            </button>
+            <button
+              className="btn secondary"
+              type="button"
+              disabled={testing || !form.discordClientId.trim()}
+              onClick={() => void onTestDiscord()}
+            >
+              {testing ? "Testing..." : "Test Discord"}
+            </button>
+          </div>
         </form>
       </div>
     </div>

@@ -14,6 +14,8 @@ pub struct AppSettings {
     pub discord_client_id: String,
     pub discord_show_listening: bool,
     pub discord_fallback_image_key: String,
+    #[serde(default)]
+    pub last_fm_api_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,6 +27,8 @@ pub struct SettingsPayload {
     pub discord_client_id: String,
     pub discord_show_listening: bool,
     pub discord_fallback_image_key: String,
+    #[serde(default)]
+    pub last_fm_api_key: String,
 }
 
 fn config_path() -> Result<PathBuf, String> {
@@ -89,6 +93,7 @@ pub fn get_settings() -> Result<SettingsPayload, String> {
         discord_client_id: file.discord_client_id,
         discord_show_listening: file.discord_show_listening,
         discord_fallback_image_key: file.discord_fallback_image_key,
+        last_fm_api_key: file.last_fm_api_key,
     })
 }
 
@@ -111,6 +116,7 @@ pub fn set_settings(payload: SettingsPayload) -> Result<SettingsPayload, String>
         } else {
             payload.discord_fallback_image_key.trim().to_string()
         },
+        last_fm_api_key: payload.last_fm_api_key.trim().to_string(),
     };
     save_file_settings(&settings)?;
     save_password(&payload.password)?;
