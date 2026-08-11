@@ -195,6 +195,39 @@ export function SettingsPage() {
           </div>
         </form>
       </div>
+
+      <section className="panel shortcuts">
+        <h2 className="panel-title">Keyboard shortcuts</h2>
+        <dl className="shortcut-list">
+          {SHORTCUTS.map(([keys, label]) => (
+            <div className="shortcut" key={label}>
+              <dt>
+                {keys.map((key) => (
+                  <kbd key={key}>{key}</kbd>
+                ))}
+              </dt>
+              <dd>{label}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="muted" style={{ margin: "0.9rem 0 0", fontSize: "0.85rem" }}>
+          Media keys and the Windows volume flyout control playback too.
+        </p>
+      </section>
     </div>
   );
 }
+
+const SHORTCUTS: [string[], string][] = [
+  [["Space", "K"], "Play / pause"],
+  [["←", "→"], "Seek 5 seconds"],
+  [["J", "L"], "Seek 10 seconds"],
+  [["Ctrl", "←/→"], "Previous / next track"],
+  [["N", "P"], "Next / previous track"],
+  [["↑", "↓"], "Volume by 5"],
+  [["M"], "Mute"],
+  [["S"], "Shuffle"],
+  [["R"], "Repeat mode"],
+  [["F"], "Favorite current song"],
+  [["Q"], "Playing Next panel"],
+];

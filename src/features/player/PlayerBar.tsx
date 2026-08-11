@@ -1,5 +1,6 @@
 import { usePlayer } from "./PlayerContext";
 import { Cover } from "../library/Cover";
+import { useFavorites } from "../library/FavoritesContext";
 import {
   IconMore,
   IconNext,
@@ -8,10 +9,11 @@ import {
   IconPrev,
   IconQueue,
   IconRepeat,
-  IconRepeatOne,
   IconShuffle,
   IconSpeaker,
+  IconSpeakerMute,
   IconStar,
+  IconStarFilled,
 } from "./icons";
 
 export function PlayerBar() {
@@ -29,12 +31,16 @@ export function PlayerBar() {
     prev,
     seek,
     setVolume,
+    adjustVolume,
     toggleShuffle,
     cycleRepeat,
     toggleQueuePanel,
   } = usePlayer();
+  const { isFavorite, toggleFavorite } = useFavorites();
 
+  const favorite = isFavorite(current?.id);
   const progress = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
+  const volumePercent = Math.round(volume * 100);
   const subtitle = [current?.artist, current?.album].filter(Boolean).join(" - ");
 
   return (
@@ -44,12 +50,13 @@ export function PlayerBar() {
           className={`icon-btn ghost${shuffle ? " active" : ""}`}
           type="button"
           onClick={toggleShuffle}
-          aria-label="Shuffle"
-          title="Shuffle"
+          aria-label={shuffle ? "Shuffle on" : "Shuffle off"}
+          aria-pressed={shuffle}
+          title={shuffle ? "Shuffle On" : "Shuffle Off"}
         >
           <IconShuffle size={16} />
         </button>
-        <button className="icon-btn ghost" type="button" onClick={prev} aria-label="Previous">
+        <button className="icon-btn ghost" type="button" onClick={prev} aria-label="Previous" title="Previous">
           <IconPrev size={17} />
         </button>
         <button
@@ -57,21 +64,32 @@ export function PlayerBar() {
           type="button"
           onClick={toggle}
           aria-label={playing ? "Pause" : "Play"}
+          title={playing ? "Pause" : "Play"}
           disabled={!current}
         >
           {playing ? <IconPause size={16} /> : <IconPlay size={16} />}
         </button>
-        <button className="icon-btn ghost" type="button" onClick={next} aria-label="Next">
+        <button className="icon-btn ghost" type="button" onClick={next} aria-label="Next" title="Next">
           <IconNext size={17} />
         </button>
         <button
-          className={`icon-btn ghost${repeat !== "off" ? " active" : ""}`}
+          className={`icon-btn ghost repeat-btn${repeat !== "off" ? " active" : ""}${repeat === "one" ? " repeat-one" : ""}`}
           type="button"
           onClick={cycleRepeat}
-          aria-label={`Repeat ${repeat}`}
-          title={repeat === "off" ? "Repeat Off" : repeat === "all" ? "Repeat All" : "Repeat One"}
+          aria-label={
+            repeat === "off" ? "Repeat off" : repeat === "all" ? "Repeat playlist" : "Repeat song"
+          }
+          aria-pressed={repeat !== "off"}
+          title={
+            repeat === "off"
+              ? "Repeat Off"
+              : repeat === "all"
+                ? "Repeat Playlist"
+                : "Repeat One Song"
+          }
         >
-          {repeat === "one" ? <IconRepeatOne size={16} /> : <IconRepeat size={16} />}
+          <IconRepeat size={16} />
+          {repeat === "one" && <span className="repeat-one-badge" aria-hidden>1</span>}
         </button>
       </div>
 
@@ -91,8 +109,16 @@ export function PlayerBar() {
             </div>
             <div className="artist">{subtitle || "Nothing playing"}</div>
           </div>
-          <button type="button" className="icon-btn tiny star" aria-label="Favorite" title="Favorite">
-            <IconStar size={15} />
+          <button
+            type="button"
+            className={`icon-btn tiny star${favorite ? " active" : ""}`}
+            onClick={() => current && void toggleFavorite(current)}
+            disabled={!current}
+            aria-pressed={favorite}
+            aria-label={favorite ? "Remove from Favorites" : "Add to Favorites"}
+            title={favorite ? "Remove from Favorites (F)" : "Add to Favorites (F)"}
+          >
+            {favorite ? <IconStarFilled size={15} /> : <IconStar size={15} />}
           </button>
         </div>
         <div className="now-progress">
@@ -111,17 +137,24 @@ export function PlayerBar() {
       </div>
 
       <div className="player-utils">
-        <div className="volume">
-          <IconSpeaker size={15} />
+        <div
+          className="volume"
+          onWheel={(e) => adjustVolume(e.deltaY < 0 ? 1 : -1)}
+          title={`Volume ${volumePercent}%`}
+        >
+          {volumePercent === 0 ? <IconSpeakerMute size={15} /> : <IconSpeaker size={15} />}
           <input
             type="range"
             min={0}
-            max={1}
-            step={0.01}
-            value={volume}
-            onChange={(e) => setVolume(Number(e.target.value))}
+            max={100}
+            step={5}
+            value={volumePercent}
+            style={{ ["--fill" as string]: `${volumePercent}%` }}
+            onChange={(e) => setVolume(Number(e.target.value) / 100)}
             aria-label="Volume"
+            aria-valuetext={`${volumePercent} percent`}
           />
+          <span className="volume-value">{volumePercent}</span>
         </div>
         <button
           className={`icon-btn ghost queue-toggle${queuePanelOpen ? " active" : ""}`}

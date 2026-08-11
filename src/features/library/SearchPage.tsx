@@ -82,7 +82,9 @@ export function SearchPage() {
         coverUrl: covers[`song:${s.id}`] ?? (await coverArtUrl(auth, s.coverArt, 300)),
       })),
     );
-    await playTracks(tracks, index);
+    await playTracks(tracks, index, {
+      source: { kind: "search", name: query ? `Search: ${query}` : "Search" },
+    });
   }
 
   return (

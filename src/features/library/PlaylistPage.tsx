@@ -54,9 +54,13 @@ export function PlaylistPage() {
   }
 
   async function playFrom(index: number, shuffle = false) {
+    if (!playlist) return;
     const tracks = await buildTracks();
     if (!tracks.length) return;
-    await playTracks(tracks, index, shuffle ? { shuffle: true } : undefined);
+    await playTracks(tracks, index, {
+      ...(shuffle ? { shuffle: true } : {}),
+      source: { kind: "playlist", id: playlist.id, name: playlist.name },
+    });
   }
 
   if (error) return <p className="error">{error}</p>;

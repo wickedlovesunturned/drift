@@ -3,12 +3,24 @@ import { Cover } from "../library/Cover";
 import { formatDuration } from "../../lib/subsonic/client";
 
 export function PlayingNext() {
-  const { upcoming, currentIndex, playQueueIndex, queue, toggleQueuePanel } = usePlayer();
+  const { upcoming, currentIndex, playQueueIndex, queue, source, toggleQueuePanel } = usePlayer();
+  const sourceLabel =
+    source?.name ||
+    (source?.kind === "playlist"
+      ? "Playlist"
+      : source?.kind === "album"
+        ? "Album"
+        : source?.kind === "search"
+          ? "Search"
+          : null);
 
   return (
     <aside className="playing-next">
       <div className="playing-next-header">
-        <h2>Playing Next</h2>
+        <div>
+          <h2>Playing Next</h2>
+          {sourceLabel && <p className="playing-next-source">{sourceLabel}</p>}
+        </div>
         <button
           type="button"
           className="icon-btn"

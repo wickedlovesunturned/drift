@@ -2,12 +2,16 @@ import { NavLink, Outlet, useNavigate, useSearchParams } from "react-router-dom"
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { PlayerBar } from "../player/PlayerBar";
 import { PlayingNext } from "../player/PlayingNext";
+import { VolumeOsd } from "../player/VolumeOsd";
 import { usePlayer } from "../player/PlayerContext";
+import { useKeyboardShortcuts } from "../player/useKeyboardShortcuts";
+import { useFavorites } from "../library/FavoritesContext";
 import { APP_NAME } from "../../lib/constants";
 import { ResizeHandle, clamp, usePersistedWidth } from "./ResizeHandle";
 
 export function AppShell() {
-  const { queuePanelOpen } = usePlayer();
+  const { queuePanelOpen, current } = usePlayer();
+  const { toggleFavorite } = useFavorites();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [navWidth, setNavWidth] = usePersistedWidth("wm.navWidth", 260);
@@ -28,6 +32,12 @@ export function AppShell() {
     (delta: number) => setNextWidth((w) => clamp(w - delta, 200, 520)),
     [setNextWidth],
   );
+
+  const onToggleFavorite = useCallback(() => {
+    if (current) void toggleFavorite(current);
+  }, [current, toggleFavorite]);
+
+  useKeyboardShortcuts(onToggleFavorite);
 
   function onSearchSubmit(e: FormEvent) {
     e.preventDefault();
@@ -52,7 +62,10 @@ export function AppShell() {
       <PlayerBar />
 
       <aside className="nav">
-        <div className="nav-brand">{APP_NAME}</div>
+        <div className="nav-brand">
+          <img className="brand-mark" src="/logo.png" alt="" />
+          <span>{APP_NAME}</span>
+        </div>
         <form className="nav-search" onSubmit={onSearchSubmit}>
           <input
             type="search"
@@ -82,6 +95,12 @@ export function AppShell() {
                 to="/library"
               >
                 <span>Albums</span>
+              </NavLink>
+              <NavLink
+                className={({ isActive }) => `nav-link sub${isActive ? " active" : ""}`}
+                to="/favorites"
+              >
+                <span>Favorites</span>
               </NavLink>
             </div>
           )}
@@ -126,6 +145,8 @@ export function AppShell() {
           <PlayingNext />
         </>
       )}
+
+      <VolumeOsd />
     </div>
   );
 }

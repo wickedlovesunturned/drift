@@ -52,9 +52,13 @@ export function AlbumPage() {
   }
 
   async function playFrom(index: number, shuffle = false) {
+    if (!album) return;
     const tracks = await buildTracks();
     if (!tracks.length) return;
-    await playTracks(tracks, index, shuffle ? { shuffle: true } : undefined);
+    await playTracks(tracks, index, {
+      ...(shuffle ? { shuffle: true } : {}),
+      source: { kind: "album", id: album.id, name: album.name },
+    });
   }
 
   if (error) return <p className="error">{error}</p>;

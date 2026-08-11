@@ -48,6 +48,7 @@ export function ConnectPage() {
   return (
     <div className="connect-page">
       <div>
+        <img className="brand-mark connect-mark" src="/logo.png" alt="" />
         <h1 className="brand">{APP_NAME}</h1>
         <p className="tagline">Your music, from your server.</p>
         <div className="panel">

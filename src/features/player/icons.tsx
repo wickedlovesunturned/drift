@@ -84,16 +84,9 @@ export function IconRepeat({ size }: IconProps) {
   );
 }
 
+/** Repeat icon only — the small "1" badge is rendered by CSS on the button. */
 export function IconRepeatOne({ size }: IconProps) {
-  return (
-    <Svg size={size}>
-      <path d="M17 2l4 4-4 4" />
-      <path d="M3 12a6 6 0 0 1 6-6h12" />
-      <path d="M7 22l-4-4 4-4" />
-      <path d="M21 12a6 6 0 0 1-6 6H3" />
-      <path d="M12 10v4" strokeWidth="2" />
-    </Svg>
-  );
+  return <IconRepeat size={size} />;
 }
 
 export function IconSpeaker({ size }: IconProps) {
@@ -102,6 +95,16 @@ export function IconSpeaker({ size }: IconProps) {
       <path d="M4 10v4h3l4 3.5V6.5L7 10H4z" fill="currentColor" stroke="none" />
       <path d="M15.5 8.5a3.5 3.5 0 0 1 0 7" />
       <path d="M17.8 6a6.5 6.5 0 0 1 0 12" />
+    </Svg>
+  );
+}
+
+export function IconSpeakerMute({ size }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M4 10v4h3l4 3.5V6.5L7 10H4z" fill="currentColor" stroke="none" />
+      <path d="M15 9.5l5 5" />
+      <path d="M20 9.5l-5 5" />
     </Svg>
   );
 }
@@ -123,6 +126,17 @@ export function IconStar({ size }: IconProps) {
   return (
     <Svg size={size}>
       <path d="M12 3.5l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 16l-4.8 2.4.9-5.4L4.2 9.2l5.4-.8L12 3.5z" />
+    </Svg>
+  );
+}
+
+export function IconStarFilled({ size }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path
+        d="M12 3.5l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 16l-4.8 2.4.9-5.4L4.2 9.2l5.4-.8L12 3.5z"
+        fill="currentColor"
+      />
     </Svg>
   );
 }

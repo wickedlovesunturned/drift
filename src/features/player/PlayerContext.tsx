@@ -8,12 +8,43 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import type { Song } from "../../lib/subsonic/client";
-import { streamUrl } from "../../lib/subsonic/client";
+import { coverArtUrl, streamUrl } from "../../lib/subsonic/client";
 import { useSettings } from "../settings/SettingsContext";
+import { useMediaSession } from "./useMediaSession";
 
 export interface PlayerTrack extends Song {
   coverUrl?: string;
+}
+
+export interface PlaybackSource {
+  kind: "playlist" | "album" | "search" | "queue";
+  id?: string;
+  name?: string;
+}
+
+export type RepeatMode = "off" | "all" | "one";
+
+/** Volume moves in 5% notches so the readout is always a round number. */
+export const VOLUME_STEP = 0.05;
+
+function snapVolume(v: number): number {
+  const clamped = Math.min(1, Math.max(0, v));
+  return Math.round(clamped / VOLUME_STEP) * VOLUME_STEP;
+}
+
+interface PlaybackSessionPayload {
+  queue: PlayerTrack[];
+  currentIndex: number;
+  positionMs: number;
+  volume: number;
+  shuffle: boolean;
+  repeat: RepeatMode;
+  queuePanelOpen: boolean;
+  wasPlaying: boolean;
+  source: PlaybackSource | null;
+  lastPath: string;
 }
 
 function artistKey(track: PlayerTrack): string {
@@ -80,7 +111,21 @@ function smartShuffle(tracks: PlayerTrack[], history: PlayerTrack[] = []): Playe
   return result;
 }
 
-export type RepeatMode = "off" | "all" | "one";
+function toSessionTrack(track: PlayerTrack): PlayerTrack {
+  return {
+    id: track.id,
+    title: track.title,
+    album: track.album,
+    albumId: track.albumId,
+    artist: track.artist,
+    artistId: track.artistId,
+    coverArt: track.coverArt,
+    track: track.track,
+    duration: track.duration,
+    year: track.year,
+    size: track.size,
+  };
+}
 
 interface PlayerContextValue {
   queue: PlayerTrack[];
@@ -94,18 +139,33 @@ interface PlayerContextValue {
   positionMs: number;
   durationMs: number;
   volume: number;
-  playTracks: (tracks: PlayerTrack[], startIndex?: number, opts?: { shuffle?: boolean }) => Promise<void>;
+  /** Bumped on every user-driven volume change so the on-screen readout can flash. */
+  volumeNudge: number;
+  muted: boolean;
+  source: PlaybackSource | null;
+  sessionReady: boolean;
+  lastPath: string;
+  playTracks: (
+    tracks: PlayerTrack[],
+    startIndex?: number,
+    opts?: { shuffle?: boolean; source?: PlaybackSource },
+  ) => Promise<void>;
   playQueueIndex: (index: number) => void;
   toggle: () => void;
+  play: () => void;
   pause: () => void;
   next: () => void;
   prev: () => void;
   seek: (ms: number) => void;
+  seekBy: (deltaMs: number) => void;
   setVolume: (v: number) => void;
+  adjustVolume: (steps: number) => void;
+  toggleMute: () => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
   toggleQueuePanel: () => void;
   setQueuePanelOpen: (open: boolean) => void;
+  setLastPath: (path: string) => void;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
@@ -118,15 +178,33 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const queueLenRef = useRef(0);
   const shuffleRef = useRef(false);
   const repeatRef = useRef<RepeatMode>("off");
+  const volumeRef = useRef(0.85);
+  const preMuteVolumeRef = useRef(0.85);
+  const positionRef = useRef(0);
+  const playingRef = useRef(false);
+  const sourceRef = useRef<PlaybackSource | null>(null);
+  const queuePanelOpenRef = useRef(false);
+  const lastPathRef = useRef("");
+  const sessionReadyRef = useRef(false);
+  const restoreSeekRef = useRef<number | null>(null);
+  const restorePlayRef = useRef(false);
+  const saveTimerRef = useRef<number | null>(null);
+  const loadedTrackIdRef = useRef<string | null>(null);
+
   const [queue, setQueue] = useState<PlayerTrack[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [playing, setPlaying] = useState(false);
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState<RepeatMode>("off");
-  const [queuePanelOpen, setQueuePanelOpen] = useState(false);
+  const [queuePanelOpen, setQueuePanelOpenState] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
   const [volume, setVolumeState] = useState(0.85);
+  const [volumeNudge, setVolumeNudge] = useState(0);
+  const [source, setSourceState] = useState<PlaybackSource | null>(null);
+  const [lastPath, setLastPathState] = useState("");
+  const [sessionReady, setSessionReady] = useState(false);
+  const [artworkUrl, setArtworkUrl] = useState<string | undefined>();
 
   const current = currentIndex >= 0 ? queue[currentIndex] ?? null : null;
   const upcoming = currentIndex >= 0 ? queue.slice(currentIndex + 1) : [];
@@ -135,10 +213,62 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   queueLenRef.current = queue.length;
   shuffleRef.current = shuffle;
   repeatRef.current = repeat;
+  volumeRef.current = volume;
+  positionRef.current = positionMs;
+  playingRef.current = playing;
+  sourceRef.current = source;
+  queuePanelOpenRef.current = queuePanelOpen;
+  lastPathRef.current = lastPath;
+  sessionReadyRef.current = sessionReady;
+
+  const buildPayload = useCallback((): PlaybackSessionPayload => {
+    const idx = currentIndexRef.current;
+    return {
+      queue: queueRef.current.map(toSessionTrack),
+      currentIndex: idx,
+      positionMs: positionRef.current,
+      volume: volumeRef.current,
+      shuffle: shuffleRef.current,
+      repeat: repeatRef.current,
+      queuePanelOpen: queuePanelOpenRef.current,
+      wasPlaying: playingRef.current,
+      source: sourceRef.current,
+      lastPath: lastPathRef.current,
+    };
+  }, []);
+
+  const persistSession = useCallback(
+    async (immediate = false) => {
+      if (!sessionReadyRef.current) return;
+      const write = async () => {
+        try {
+          await invoke("session_set", { payload: buildPayload() });
+        } catch {
+          /* ignore disk errors while playing */
+        }
+      };
+      if (immediate) {
+        if (saveTimerRef.current != null) {
+          window.clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = null;
+        }
+        await write();
+        return;
+      }
+      if (saveTimerRef.current != null) return;
+      saveTimerRef.current = window.setTimeout(() => {
+        saveTimerRef.current = null;
+        void write();
+      }, 800);
+    },
+    [buildPayload],
+  );
 
   const advanceFrom = useCallback((idx: number) => {
     const q = queueRef.current;
     if (idx < 0 || q.length === 0) return;
+
+    // Repeat one is handled on track end; Next always advances.
 
     if (shuffleRef.current) {
       const played = q.slice(0, idx + 1);
@@ -179,10 +309,22 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     audio.preload = "metadata";
     audioRef.current = audio;
 
-    const onTime = () => setPositionMs((audio.currentTime || 0) * 1000);
+    const onTime = () => {
+      const ms = (audio.currentTime || 0) * 1000;
+      positionRef.current = ms;
+      setPositionMs(ms);
+    };
     const onMeta = () => setDurationMs((audio.duration || 0) * 1000);
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
+    const onPlay = () => {
+      playingRef.current = true;
+      setPlaying(true);
+      void persistSession(true);
+    };
+    const onPause = () => {
+      playingRef.current = false;
+      setPlaying(false);
+      void persistSession(true);
+    };
     const onEnded = () => {
       if (repeatRef.current === "one") {
         audio.currentTime = 0;
@@ -197,7 +339,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
     audio.addEventListener("ended", onEnded);
-    audio.volume = volume;
 
     return () => {
       audio.pause();
@@ -208,27 +349,163 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener("ended", onEnded);
       audioRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [advanceFrom]);
+  }, [advanceFrom, persistSession]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
   }, [volume]);
+
+  // Restore saved session once auth is ready.
+  useEffect(() => {
+    if (!auth || sessionReady) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const saved = await invoke<PlaybackSessionPayload>("session_get");
+        if (cancelled) return;
+
+        const nextVolume = snapVolume(saved.volume ?? 0.85);
+        const nextRepeat: RepeatMode =
+          saved.repeat === "all" || saved.repeat === "one" ? saved.repeat : "off";
+        const nextPath = saved.lastPath ?? "";
+        const nextSource = saved.source ?? null;
+        const rawQueue = Array.isArray(saved.queue) ? saved.queue : [];
+
+        setVolumeState(nextVolume);
+        volumeRef.current = nextVolume;
+        setShuffle(Boolean(saved.shuffle));
+        shuffleRef.current = Boolean(saved.shuffle);
+        setRepeat(nextRepeat);
+        repeatRef.current = nextRepeat;
+        setQueuePanelOpenState(Boolean(saved.queuePanelOpen));
+        queuePanelOpenRef.current = Boolean(saved.queuePanelOpen);
+        setLastPathState(nextPath);
+        lastPathRef.current = nextPath;
+        setSourceState(nextSource);
+        sourceRef.current = nextSource;
+
+        if (rawQueue.length > 0) {
+          const refreshed = await Promise.all(
+            rawQueue.map(async (t) => ({
+              ...t,
+              coverUrl: await coverArtUrl(auth, t.coverArt, 300),
+            })),
+          );
+          if (cancelled) return;
+
+          let idx = Number.isFinite(saved.currentIndex) ? Math.floor(saved.currentIndex) : 0;
+          if (idx < 0) idx = 0;
+          if (idx >= refreshed.length) idx = refreshed.length - 1;
+
+          restoreSeekRef.current = Math.max(0, saved.positionMs || 0);
+          restorePlayRef.current = Boolean(saved.wasPlaying);
+          loadedTrackIdRef.current = null;
+          setQueue(refreshed);
+          setCurrentIndex(idx);
+          setDurationMs((refreshed[idx]?.duration ?? 0) * 1000);
+          setPositionMs(Math.max(0, saved.positionMs || 0));
+          positionRef.current = Math.max(0, saved.positionMs || 0);
+        }
+      } catch {
+        /* fresh install / missing session */
+      } finally {
+        if (!cancelled) {
+          setSessionReady(true);
+          sessionReadyRef.current = true;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth, sessionReady]);
+
+  // Persist when queue / controls change.
+  useEffect(() => {
+    if (!sessionReady) return;
+    void persistSession(true);
+  }, [queue, currentIndex, shuffle, repeat, queuePanelOpen, source, lastPath, volume, sessionReady, persistSession]);
+
+  // Periodic position checkpoint while playing.
+  useEffect(() => {
+    if (!sessionReady || !playing) return;
+    const id = window.setInterval(() => {
+      void persistSession(true);
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [sessionReady, playing, persistSession]);
+
+  // Flush on tab/app hide.
+  useEffect(() => {
+    const flush = () => {
+      void persistSession(true);
+    };
+    window.addEventListener("beforeunload", flush);
+    document.addEventListener("visibilitychange", flush);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      document.removeEventListener("visibilitychange", flush);
+      flush();
+    };
+  }, [persistSession]);
 
   const loadAndPlay = useCallback(
     async (track: PlayerTrack) => {
       if (!auth || !audioRef.current) return;
       const url = await streamUrl(auth, track.id);
       const audio = audioRef.current;
+      const seekTo = restoreSeekRef.current;
+      const shouldPlay = restoreSeekRef.current != null ? restorePlayRef.current : true;
+      restoreSeekRef.current = null;
+      restorePlayRef.current = false;
+
       audio.src = url;
-      setPositionMs(0);
       setDurationMs((track.duration ?? 0) * 1000);
-      await audio.play();
+
+      const applySeek = () => {
+        if (seekTo != null && seekTo > 0) {
+          try {
+            audio.currentTime = seekTo / 1000;
+          } catch {
+            /* ignore */
+          }
+          positionRef.current = seekTo;
+          setPositionMs(seekTo);
+        } else {
+          positionRef.current = 0;
+          setPositionMs(0);
+        }
+      };
+
+      if (seekTo != null && seekTo > 0) {
+        await new Promise<void>((resolve) => {
+          const onReady = () => {
+            audio.removeEventListener("loadedmetadata", onReady);
+            applySeek();
+            resolve();
+          };
+          audio.addEventListener("loadedmetadata", onReady);
+          // Fallback if metadata already available.
+          if (audio.readyState >= 1) onReady();
+        });
+      } else {
+        applySeek();
+      }
+
+      if (shouldPlay) {
+        try {
+          await audio.play();
+        } catch {
+          /* autoplay may be blocked after restore */
+        }
+      } else {
+        audio.pause();
+      }
     },
     [auth],
   );
-
-  const loadedTrackIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (currentIndex < 0 || !queue[currentIndex]) return;
@@ -239,7 +516,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [currentIndex, queue, loadAndPlay]);
 
   const playTracks = useCallback(
-    async (tracks: PlayerTrack[], startIndex = 0, opts?: { shuffle?: boolean }) => {
+    async (
+      tracks: PlayerTrack[],
+      startIndex = 0,
+      opts?: { shuffle?: boolean; source?: PlaybackSource },
+    ) => {
       if (!tracks.length) return;
       const explicitShuffle = opts?.shuffle === true;
       const shouldShuffle = explicitShuffle || shuffleRef.current;
@@ -253,7 +534,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
       if (shouldShuffle) {
         if (explicitShuffle) {
-          // Shuffle button: algorithm picks the opener, then orders the rest.
           ordered = smartShuffle(ordered);
           index = 0;
         } else {
@@ -267,6 +547,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      if (opts?.source) {
+        sourceRef.current = opts.source;
+        setSourceState(opts.source);
+      }
+
+      restoreSeekRef.current = null;
+      restorePlayRef.current = true;
       loadedTrackIdRef.current = null;
       setQueue(ordered);
       setCurrentIndex(index);
@@ -288,6 +575,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     else audio.pause();
   }, [current]);
 
+  const play = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || !current) return;
+    if (audio.paused) void audio.play();
+  }, [current]);
+
   const pause = useCallback(() => {
     audioRef.current?.pause();
   }, []);
@@ -305,16 +598,55 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setCurrentIndex((idx) => (idx > 0 ? idx - 1 : idx));
   }, []);
 
-  const seek = useCallback((ms: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = ms / 1000;
-    setPositionMs(ms);
-  }, []);
+  const seek = useCallback(
+    (ms: number) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio.currentTime = ms / 1000;
+      positionRef.current = ms;
+      setPositionMs(ms);
+      void persistSession(true);
+    },
+    [persistSession],
+  );
 
-  const setVolume = useCallback((v: number) => {
-    setVolumeState(Math.min(1, Math.max(0, v)));
-  }, []);
+  const seekBy = useCallback(
+    (deltaMs: number) => {
+      const audio = audioRef.current;
+      if (!audio || !current) return;
+      const totalMs = (audio.duration || 0) * 1000;
+      const target = Math.max(0, positionRef.current + deltaMs);
+      seek(totalMs > 0 ? Math.min(totalMs, target) : target);
+    },
+    [current, seek],
+  );
+
+  const setVolume = useCallback(
+    (v: number) => {
+      const next = snapVolume(v);
+      volumeRef.current = next;
+      setVolumeState(next);
+      setVolumeNudge((n) => n + 1);
+      void persistSession();
+    },
+    [persistSession],
+  );
+
+  const adjustVolume = useCallback(
+    (steps: number) => {
+      setVolume(volumeRef.current + steps * VOLUME_STEP);
+    },
+    [setVolume],
+  );
+
+  const toggleMute = useCallback(() => {
+    if (volumeRef.current > 0) {
+      preMuteVolumeRef.current = volumeRef.current;
+      setVolume(0);
+      return;
+    }
+    setVolume(preMuteVolumeRef.current || 0.5);
+  }, [setVolume]);
 
   const toggleShuffle = useCallback(() => {
     setShuffle((on) => {
@@ -338,7 +670,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggleQueuePanel = useCallback(() => {
-    setQueuePanelOpen((open) => !open);
+    setQueuePanelOpenState((open) => {
+      const next = !open;
+      queuePanelOpenRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const setQueuePanelOpen = useCallback((open: boolean) => {
+    queuePanelOpenRef.current = open;
+    setQueuePanelOpenState(open);
   }, []);
 
   const cycleRepeat = useCallback(() => {
@@ -348,6 +689,42 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       return nextMode;
     });
   }, []);
+
+  const setLastPath = useCallback((path: string) => {
+    if (!path || path === lastPathRef.current) return;
+    lastPathRef.current = path;
+    setLastPathState(path);
+  }, []);
+
+  // Larger art than the player bar uses, for the Windows media flyout.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!auth || !current?.coverArt) {
+        setArtworkUrl(undefined);
+        return;
+      }
+      const url = await coverArtUrl(auth, current.coverArt, 600);
+      if (!cancelled) setArtworkUrl(url);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth, current?.coverArt]);
+
+  useMediaSession({
+    track: current,
+    artworkUrl,
+    playing,
+    positionMs,
+    durationMs,
+    play,
+    pause,
+    next,
+    prev,
+    seek,
+    seekBy,
+  });
 
   const value = useMemo(
     () => ({
@@ -362,18 +739,28 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       positionMs,
       durationMs,
       volume,
+      volumeNudge,
+      muted: volume === 0,
+      source,
+      sessionReady,
+      lastPath,
       playTracks,
       playQueueIndex,
       toggle,
+      play,
       pause,
       next,
       prev,
       seek,
+      seekBy,
       setVolume,
+      adjustVolume,
+      toggleMute,
       toggleShuffle,
       cycleRepeat,
       toggleQueuePanel,
       setQueuePanelOpen,
+      setLastPath,
     }),
     [
       queue,
@@ -387,17 +774,27 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       positionMs,
       durationMs,
       volume,
+      volumeNudge,
+      source,
+      sessionReady,
+      lastPath,
       playTracks,
       playQueueIndex,
       toggle,
+      play,
       pause,
       next,
       prev,
       seek,
+      seekBy,
       setVolume,
+      adjustVolume,
+      toggleMute,
       toggleShuffle,
       cycleRepeat,
       toggleQueuePanel,
+      setQueuePanelOpen,
+      setLastPath,
     ],
   );
 
