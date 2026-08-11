@@ -1,7 +1,9 @@
 mod discord;
+mod session;
 mod settings;
 
 use discord::{DiscordState, DiscordStatus, PresencePayload, SharedDiscord};
+use session::PlaybackSession;
 use settings::SettingsPayload;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -52,6 +54,16 @@ fn discord_status(app: tauri::AppHandle) -> Result<DiscordStatus, String> {
 }
 
 #[tauri::command]
+fn session_get() -> Result<PlaybackSession, String> {
+    session::get_session()
+}
+
+#[tauri::command]
+fn session_set(payload: PlaybackSession) -> Result<PlaybackSession, String> {
+    session::set_session(payload)
+}
+
+#[tauri::command]
 fn discord_test(app: tauri::AppHandle) -> Result<DiscordStatus, String> {
     let settings = settings::get_settings()?;
     if settings.discord_client_id.trim().is_empty() {
@@ -83,6 +95,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             settings_get,
             settings_set,
+            session_get,
+            session_set,
             discord_set_presence,
             discord_clear_presence,
             discord_status,

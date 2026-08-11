@@ -30,6 +30,8 @@ export interface Song {
   year?: number;
   /** File size in bytes (Subsonic Child.size) */
   size?: number;
+  /** ISO timestamp set by the server when the song is starred. */
+  starred?: string;
 }
 
 export interface Playlist {
@@ -281,6 +283,19 @@ export async function search3(auth: AuthConfig, query: string) {
     searchResult3?: { artist?: Artist[]; album?: Album[]; song?: Song[] };
   }>(auth, "search3", { query, artistCount: 10, albumCount: 20, songCount: 20 });
   return root.searchResult3 ?? {};
+}
+
+export async function star(auth: AuthConfig, id: string): Promise<void> {
+  await request(auth, "star", { id });
+}
+
+export async function unstar(auth: AuthConfig, id: string): Promise<void> {
+  await request(auth, "unstar", { id });
+}
+
+export async function getStarredSongs(auth: AuthConfig): Promise<Song[]> {
+  const root = await request<{ starred2?: { song?: Song[] } }>(auth, "getStarred2");
+  return root.starred2?.song ?? [];
 }
 
 export async function coverArtUrl(
