@@ -52,10 +52,11 @@ impl DiscordState {
 
 pub type SharedDiscord = Mutex<DiscordState>;
 
-fn now_secs() -> i64 {
+/// AMWin-RP / Lachee DiscordRPC use Unix milliseconds for timestamps.
+fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
+        .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
 }
 
@@ -75,20 +76,21 @@ fn is_private_host(host: &str) -> bool {
     false
 }
 
-/// Prefer public HTTPS cover URLs as LargeImageKey (AMWin-RP pattern); else portal asset.
-pub fn resolve_large_image(cover_url: Option<&str>, fallback_key: &str) -> String {
+fn resolve_large_image(cover_url: Option<&str>, fallback_key: &str) -> String {
+    let fallback = fallback_key.trim();
     let Some(raw) = cover_url.map(str::trim).filter(|s| !s.is_empty()) else {
-        return fallback_key.to_string();
+        return fallback.to_string();
     };
     let Ok(parsed) = Url::parse(raw) else {
-        return fallback_key.to_string();
+        return fallback.to_string();
     };
+    // Discord only fetches public HTTPS image URLs (same pattern as AMWin-RP).
     if parsed.scheme() != "https" {
-        return fallback_key.to_string();
+        return fallback.to_string();
     }
     match parsed.host_str() {
         Some(host) if !is_private_host(host) => raw.to_string(),
-        _ => fallback_key.to_string(),
+        _ => fallback.to_string(),
     }
 }
 
@@ -96,7 +98,15 @@ fn truncate(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         s.to_string()
     } else {
-        s.chars().take(max.saturating_sub(1)).collect::<String>() + "..."
+        s.chars().take(max.saturating_sub(3)).collect::<String>() + "..."
+    }
+}
+
+fn pad_min2(s: String) -> String {
+    if s.chars().count() >= 2 {
+        s
+    } else {
+        format!("{s}\0")
     }
 }
 
@@ -111,37 +121,40 @@ struct OwnedActivityParts {
 }
 
 fn parts_from_payload(payload: &PresencePayload) -> OwnedActivityParts {
-    // AMWin-RP style: PlaybackStart = now - position, PlaybackEnd = now + remaining
     let (start, end) = if !payload.paused && payload.duration_ms > 0 {
-        let pos_s = (payload.position_ms / 1000) as i64;
-        let dur_s = (payload.duration_ms / 1000) as i64;
-        let now = now_secs();
-        (Some(now - pos_s), Some(now + (dur_s - pos_s).max(0)))
+        let now = now_ms();
+        let start = now - payload.position_ms as i64;
+        let end = start + payload.duration_ms as i64;
+        (Some(start), Some(end))
     } else {
         (None, None)
     };
 
+    // Discord buttons require https:// URLs. Never attach http:// (would fail SET_ACTIVITY).
+    let button_url = {
+        let url = payload.server_url.trim();
+        if url.starts_with("https://") {
+            Some(url.to_string())
+        } else {
+            None
+        }
+    };
+
     OwnedActivityParts {
-        details: truncate(&payload.title, 128),
-        state: truncate(&payload.artist, 128),
+        details: pad_min2(truncate(&payload.title, 128)),
+        state: pad_min2(truncate(&payload.artist, 128)),
         large_image: resolve_large_image(payload.cover_url.as_deref(), &payload.fallback_image_key),
-        large_text: truncate(&payload.album, 128),
+        large_text: pad_min2(truncate(&payload.album, 128)),
         start,
         end,
-        button_url: {
-            let url = payload.server_url.trim();
-            if url.starts_with("http://") || url.starts_with("https://") {
-                Some(url.to_string())
-            } else {
-                None
-            }
-        },
+        button_url,
     }
 }
 
 fn ensure_connected(state: &mut DiscordState, client_id: &str) -> Result<(), String> {
-    if client_id.trim().is_empty() {
-        return Err("Discord Application Client ID is not set".to_string());
+    let client_id = client_id.trim();
+    if client_id.is_empty() {
+        return Err("Discord Application Client ID is not set. Add it in Settings.".to_string());
     }
 
     let needs_new = match (&state.client, &state.client_id) {
@@ -155,13 +168,18 @@ fn ensure_connected(state: &mut DiscordState, client_id: &str) -> Result<(), Str
             let _ = old.close();
         }
         let mut client = DiscordIpcClient::new(client_id);
+        // Connect scans discord-ipc-0 .. discord-ipc-9 named pipes (Windows).
         client.connect().map_err(|e| {
-            state.last_error = Some(e.to_string());
-            e.to_string()
+            let msg = format!(
+                "Could not connect to Discord IPC ({e}). Is Discord desktop running and not in admin-only mode?"
+            );
+            state.last_error = Some(msg.clone());
+            msg
         })?;
         state.client = Some(client);
         state.client_id = Some(client_id.to_string());
         state.last_error = None;
+        eprintln!("[discord] connected with client_id={client_id}");
     }
 
     Ok(())
@@ -171,16 +189,26 @@ fn set_activity_with_parts(
     client: &mut DiscordIpcClient,
     parts: &OwnedActivityParts,
     with_buttons: bool,
+    listening: bool,
 ) -> Result<(), String> {
-    let assets = Assets::new()
-        .large_image(parts.large_image.as_str())
-        .large_text(parts.large_text.as_str());
+    let mut assets = Assets::new();
+    if !parts.large_image.is_empty() {
+        assets = assets.large_image(parts.large_image.as_str());
+    }
+    if !parts.large_text.is_empty() {
+        assets = assets.large_text(parts.large_text.as_str());
+    }
 
     let mut activity = Activity::new()
-        .activity_type(ActivityType::Listening)
         .details(parts.details.as_str())
         .state(parts.state.as_str())
         .assets(assets);
+
+    activity = if listening {
+        activity.activity_type(ActivityType::Listening)
+    } else {
+        activity.activity_type(ActivityType::Playing)
+    };
 
     if let (Some(start), Some(end)) = (parts.start, parts.end) {
         activity = activity.timestamps(Timestamps::new().start(start).end(end));
@@ -205,36 +233,50 @@ pub fn set_presence(state: &SharedDiscord, payload: PresencePayload) -> Result<(
         .as_mut()
         .ok_or_else(|| "Discord client not connected".to_string())?;
 
-    match set_activity_with_parts(client, &parts, true) {
+    // Prefer Listening (AMWin-RP). Fall back: no buttons, then Playing type, then reconnect.
+    let attempts: [(bool, bool); 3] = [
+        (parts.button_url.is_some(), true),
+        (false, true),
+        (false, false),
+    ];
+
+    let mut last_err = None;
+    for (with_buttons, listening) in attempts {
+        match set_activity_with_parts(client, &parts, with_buttons, listening) {
+            Ok(()) => {
+                guard.last_error = None;
+                guard.last_payload = Some(payload);
+                eprintln!(
+                    "[discord] presence set title={} artist={} listening={listening} buttons={with_buttons}",
+                    parts.details, parts.state
+                );
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("[discord] set_activity failed: {e}");
+                last_err = Some(e);
+            }
+        }
+    }
+
+    // Stale pipe - reconnect once
+    guard.client = None;
+    ensure_connected(&mut guard, &payload.client_id)?;
+    let client = guard
+        .client
+        .as_mut()
+        .ok_or_else(|| "Discord client not connected".to_string())?;
+    match set_activity_with_parts(client, &parts, false, true) {
         Ok(()) => {
-            guard.last_error = None;
+            guard.last_error = Some("Reconnected to Discord IPC".to_string());
             guard.last_payload = Some(payload);
             Ok(())
         }
-        Err(e) => match set_activity_with_parts(client, &parts, false) {
-            Ok(()) => {
-                guard.last_error =
-                    Some(format!("Buttons unsupported; presence set without them ({e})"));
-                guard.last_payload = Some(payload);
-                Ok(())
-            }
-            Err(e2) => {
-                guard.client = None;
-                ensure_connected(&mut guard, &payload.client_id)?;
-                let client = guard
-                    .client
-                    .as_mut()
-                    .ok_or_else(|| "Discord client not connected".to_string())?;
-                let result = set_activity_with_parts(client, &parts, false);
-                if let Err(ref err) = result {
-                    guard.last_error = Some(err.clone());
-                } else {
-                    guard.last_error = Some(format!("Reconnected after error: {e2}"));
-                    guard.last_payload = Some(payload);
-                }
-                result
-            }
-        },
+        Err(e) => {
+            let msg = last_err.unwrap_or(e);
+            guard.last_error = Some(msg.clone());
+            Err(msg)
+        }
     }
 }
 
@@ -245,6 +287,11 @@ pub fn clear_presence(state: &SharedDiscord) -> Result<(), String> {
         let _ = client.clear_activity();
     }
     Ok(())
+}
+
+pub fn connect_only(state: &SharedDiscord, client_id: &str) -> Result<(), String> {
+    let mut guard = state.lock().map_err(|e| e.to_string())?;
+    ensure_connected(&mut guard, client_id)
 }
 
 pub fn status(state: &SharedDiscord, enabled: bool) -> DiscordStatus {

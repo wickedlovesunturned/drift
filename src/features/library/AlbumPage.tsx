@@ -39,9 +39,9 @@ export function AlbumPage() {
     };
   }, [auth, id]);
 
-  async function playFrom(index: number) {
-    if (!album?.song?.length || !auth) return;
-    const tracks: PlayerTrack[] = await Promise.all(
+  async function buildTracks(): Promise<PlayerTrack[]> {
+    if (!album?.song?.length || !auth) return [];
+    return Promise.all(
       album.song.map(async (s) => ({
         ...s,
         album: s.album ?? album.name,
@@ -49,11 +49,16 @@ export function AlbumPage() {
           (await coverArtUrl(auth, s.coverArt ?? album.coverArt ?? album.id, 300)) ?? cover,
       })),
     );
-    await playTracks(tracks, index);
+  }
+
+  async function playFrom(index: number, shuffle = false) {
+    const tracks = await buildTracks();
+    if (!tracks.length) return;
+    await playTracks(tracks, index, shuffle ? { shuffle: true } : undefined);
   }
 
   if (error) return <p className="error">{error}</p>;
-  if (!album) return <p className="muted">Loading album…</p>;
+  if (!album) return <p className="muted">Loading album...</p>;
 
   return (
     <div>
@@ -68,9 +73,18 @@ export function AlbumPage() {
             {album.artist}
             {album.year ? ` · ${album.year}` : ""}
           </p>
-          <button className="btn" type="button" onClick={() => void playFrom(0)}>
-            Play
-          </button>
+          <div className="hero-actions">
+            <button className="btn" type="button" onClick={() => void playFrom(0)}>
+              Play
+            </button>
+            <button
+              className="btn secondary"
+              type="button"
+              onClick={() => void playFrom(0, true)}
+            >
+              Shuffle
+            </button>
+          </div>
         </div>
       </div>
       <ul className="track-list">

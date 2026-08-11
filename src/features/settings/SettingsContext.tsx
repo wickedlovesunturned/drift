@@ -18,6 +18,7 @@ export interface AppSettings {
   discordClientId: string;
   discordShowListening: boolean;
   discordFallbackImageKey: string;
+  lastFmApiKey: string;
 }
 
 interface SettingsContextValue {
@@ -36,6 +37,7 @@ const defaultSettings: AppSettings = {
   discordClientId: "",
   discordShowListening: false,
   discordFallbackImageKey: "app_logo",
+  lastFmApiKey: "",
 };
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);

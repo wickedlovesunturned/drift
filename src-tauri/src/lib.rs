@@ -20,15 +20,15 @@ fn settings_set(
     if !saved.discord_show_listening {
         let state = app.state::<SharedDiscord>();
         let _ = discord::clear_presence(&state);
+    } else if !saved.discord_client_id.trim().is_empty() {
+        let state = app.state::<SharedDiscord>();
+        let _ = discord::connect_only(&state, &saved.discord_client_id);
     }
     Ok(saved)
 }
 
 #[tauri::command]
-fn discord_set_presence(
-    app: tauri::AppHandle,
-    payload: PresencePayload,
-) -> Result<(), String> {
+fn discord_set_presence(app: tauri::AppHandle, payload: PresencePayload) -> Result<(), String> {
     let settings = settings::get_settings()?;
     if !settings.discord_show_listening {
         let state = app.state::<SharedDiscord>();
@@ -51,6 +51,30 @@ fn discord_status(app: tauri::AppHandle) -> Result<DiscordStatus, String> {
     Ok(discord::status(&state, settings.discord_show_listening))
 }
 
+#[tauri::command]
+fn discord_test(app: tauri::AppHandle) -> Result<DiscordStatus, String> {
+    let settings = settings::get_settings()?;
+    if settings.discord_client_id.trim().is_empty() {
+        return Err("Set a Discord Application Client ID first.".to_string());
+    }
+    let state = app.state::<SharedDiscord>();
+    discord::connect_only(&state, &settings.discord_client_id)?;
+    let payload = PresencePayload {
+        title: "Wicked Music".to_string(),
+        artist: "Connected".to_string(),
+        album: "Test".to_string(),
+        position_ms: 0,
+        duration_ms: 180_000,
+        cover_url: None,
+        server_url: settings.server_url,
+        client_id: settings.discord_client_id,
+        fallback_image_key: settings.discord_fallback_image_key,
+        paused: false,
+    };
+    discord::set_presence(&state, payload)?;
+    Ok(discord::status(&state, settings.discord_show_listening))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -61,7 +85,8 @@ pub fn run() {
             settings_set,
             discord_set_presence,
             discord_clear_presence,
-            discord_status
+            discord_status,
+            discord_test
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

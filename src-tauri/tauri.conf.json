@@ -13,10 +13,10 @@
     "windows": [
       {
         "title": "Wicked Music",
-        "width": 1680,
-        "height": 1050,
-        "minWidth": 1280,
-        "minHeight": 800,
+        "width": 1920,
+        "height": 1080,
+        "minWidth": 1100,
+        "minHeight": 700,
         "maximized": true,
         "resizable": true
       }
