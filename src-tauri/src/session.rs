@@ -91,7 +91,7 @@ impl Default for PlaybackSession {
 fn session_path() -> Result<PathBuf, String> {
     let dir = dirs::config_dir()
         .ok_or_else(|| "Could not resolve config directory".to_string())?
-        .join("wicked-music");
+        .join("drift");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir.join("session.json"))
 }

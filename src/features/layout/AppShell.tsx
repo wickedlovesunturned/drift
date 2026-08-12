@@ -14,8 +14,8 @@ export function AppShell() {
   const { toggleFavorite } = useFavorites();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const [navWidth, setNavWidth] = usePersistedWidth("wm.navWidth", 260);
-  const [nextWidth, setNextWidth] = usePersistedWidth("wm.nextWidth", 340);
+  const [navWidth, setNavWidth] = usePersistedWidth("drift.navWidth", 260);
+  const [nextWidth, setNextWidth] = usePersistedWidth("drift.nextWidth", 340);
   const [libraryOpen, setLibraryOpen] = useState(true);
   const [playlistsOpen, setPlaylistsOpen] = useState(true);
   const [searchText, setSearchText] = useState(params.get("q") ?? "");

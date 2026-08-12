@@ -190,7 +190,7 @@ function md5Fallback(str: string): string {
   return md51(unescape(encodeURIComponent(str))).map(rhex).join("");
 }
 
-const CLIENT = "navidrome-desktop";
+const CLIENT = "drift";
 const API_VERSION = "1.16.1";
 
 export async function buildAuthParams(auth: AuthConfig): Promise<URLSearchParams> {
