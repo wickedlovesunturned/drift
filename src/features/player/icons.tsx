@@ -122,6 +122,19 @@ export function IconQueue({ size }: IconProps) {
   );
 }
 
+export function IconLyrics({ size }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M6 6h12" />
+      <path d="M6 10h8" />
+      <path d="M6 14h10" />
+      <path d="M6 18h6" />
+      <path d="M17 14v6" />
+      <path d="M14 17h6" />
+    </Svg>
+  );
+}
+
 export function IconStar({ size }: IconProps) {
   return (
     <Svg size={size}>

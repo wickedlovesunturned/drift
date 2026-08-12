@@ -59,7 +59,7 @@ function randomSalt(len = 12): string {
   return out;
 }
 
-async function md5Hex(text: string): Promise<string> {
+export async function md5Hex(text: string): Promise<string> {
   // Chromium WebCrypto does not support MD5; always use the local implementation.
   return md5Fallback(text);
 }
@@ -296,6 +296,19 @@ export async function unstar(auth: AuthConfig, id: string): Promise<void> {
 export async function getStarredSongs(auth: AuthConfig): Promise<Song[]> {
   const root = await request<{ starred2?: { song?: Song[] } }>(auth, "getStarred2");
   return root.starred2?.song ?? [];
+}
+
+export async function getLyrics(
+  auth: AuthConfig,
+  artist: string,
+  title: string,
+): Promise<{ artist?: string; title?: string; value?: string } | null> {
+  const root = await request<{ lyrics?: { artist?: string; title?: string; value?: string } }>(
+    auth,
+    "getLyrics",
+    { artist, title },
+  );
+  return root.lyrics ?? null;
 }
 
 export async function coverArtUrl(

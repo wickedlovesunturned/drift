@@ -23,6 +23,7 @@ export function useKeyboardShortcuts(onToggleFavorite?: () => void) {
     toggleShuffle,
     cycleRepeat,
     toggleQueuePanel,
+    toggleLyricsPanel,
   } = usePlayer();
 
   useEffect(() => {
@@ -89,6 +90,10 @@ export function useKeyboardShortcuts(onToggleFavorite?: () => void) {
         case "Q":
           toggleQueuePanel();
           break;
+        case "y":
+        case "Y":
+          toggleLyricsPanel();
+          break;
         case "f":
         case "F":
           onToggleFavorite?.();
@@ -112,6 +117,7 @@ export function useKeyboardShortcuts(onToggleFavorite?: () => void) {
     toggleShuffle,
     cycleRepeat,
     toggleQueuePanel,
+    toggleLyricsPanel,
     onToggleFavorite,
   ]);
 }

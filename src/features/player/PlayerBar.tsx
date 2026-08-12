@@ -9,6 +9,7 @@ import {
   IconPlay,
   IconPrev,
   IconQueue,
+  IconLyrics,
   IconRepeat,
   IconShuffle,
   IconSpeaker,
@@ -24,6 +25,7 @@ export function PlayerBar() {
     shuffle,
     repeat,
     queuePanelOpen,
+    lyricsPanelOpen,
     positionMs,
     durationMs,
     volume,
@@ -36,6 +38,7 @@ export function PlayerBar() {
     toggleShuffle,
     cycleRepeat,
     toggleQueuePanel,
+    toggleLyricsPanel,
   } = usePlayer();
   const { isFavorite, toggleFavorite } = useFavorites();
 
@@ -157,6 +160,16 @@ export function PlayerBar() {
           />
           <span className="volume-value">{volumePercent}</span>
         </div>
+        <button
+          className={`icon-btn ghost lyrics-toggle${lyricsPanelOpen ? " active" : ""}`}
+          type="button"
+          onClick={toggleLyricsPanel}
+          aria-label={lyricsPanelOpen ? "Hide lyrics" : "Show lyrics"}
+          aria-pressed={lyricsPanelOpen}
+          title="Lyrics (Y)"
+        >
+          <IconLyrics size={17} />
+        </button>
         <button
           className={`icon-btn ghost queue-toggle${queuePanelOpen ? " active" : ""}`}
           type="button"

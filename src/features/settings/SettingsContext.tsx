@@ -18,6 +18,11 @@ export interface AppSettings {
   discordShowListening: boolean;
   discordFallbackImageKey: string;
   lastFmApiKey: string;
+  lastFmApiSecret: string;
+  lastFmUsername: string;
+  lastFmPassword: string;
+  lastFmSessionKey: string;
+  lastFmScrobbleEnabled: boolean;
 }
 
 interface SettingsContextValue {
@@ -37,6 +42,11 @@ const defaultSettings: AppSettings = {
   discordShowListening: false,
   discordFallbackImageKey: "app_logo",
   lastFmApiKey: "",
+  lastFmApiSecret: "",
+  lastFmUsername: "",
+  lastFmPassword: "",
+  lastFmSessionKey: "",
+  lastFmScrobbleEnabled: false,
 };
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);

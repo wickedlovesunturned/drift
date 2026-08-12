@@ -12,6 +12,8 @@ drift ships with no server baked in — you point it at your own Navidrome insta
 - Browse Home, Albums, Favorites, and Playlists, with search across the library
 - Play, pause, seek, shuffle, repeat, and a resizable "Playing Next" queue
 - Favorites synced to the server
+- **Last.fm scrobbling** (optional) with now playing + scrobble when you've listened long enough
+- **Lyrics** with synchronized (LRC) and plain text, from Navidrome or LRCLIB fallback
 - Media key support and a volume overlay
 - Playback session and last view restored on relaunch
 - Discord Rich Presence showing what you are listening to
@@ -102,6 +104,22 @@ Settings.
 | `R` | Repeat mode |
 | `F` | Favorite current song |
 | `Q` | Toggle Playing Next panel |
+| `Y` | Toggle lyrics panel |
+
+## Last.fm scrobbling
+
+1. Create an API account at [last.fm/api](https://www.last.fm/api/account/create).
+2. Open **Settings → Last.fm** and paste your API key and shared secret.
+3. Enter your Last.fm username and password, then click **Connect Last.fm**.
+4. Enable **Enable scrobbling**. Plays scrobble after half the track or four minutes (whichever is lower).
+
+The same API key can also power Discord album art when Rich Presence is enabled.
+
+## Lyrics
+
+Press **Y** or click the lyrics button in the player bar. drift tries your Navidrome server first,
+then falls back to [LRCLIB](https://lrclib.net) for synchronized or plain lyrics. Synced lines
+highlight with playback; click a line to seek. Use the **±0.5s** controls to nudge timing if needed.
 
 ## Project layout
 
@@ -110,7 +128,9 @@ src/                    React UI
   features/auth/        First-run connect screen
   features/layout/      App shell, title bar, navigation
   features/library/     Home, albums, playlists, search, favorites
-  features/player/      Playback engine, player bar, queue
+  features/player/      Playback engine, player bar, queue, lyrics
+  features/lastfm/      Last.fm scrobbling hook
+  features/lyrics/      Lyrics panel (sync + plain)
   features/settings/    Settings screen and persistence
   lib/subsonic/         Subsonic API client
 src-tauri/              Tauri/Rust backend (settings, keyring, session, Discord IPC)

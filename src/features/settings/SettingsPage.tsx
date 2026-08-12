@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useSettings, type AppSettings } from "./SettingsContext";
 import { invoke } from "@tauri-apps/api/core";
 import { APP_NAME, SERVER_URL_EXAMPLE } from "../../lib/constants";
+import { getLastFmSession } from "../../lib/lastfm";
+import { ToggleSwitch } from "./ToggleSwitch";
 
 interface DiscordStatus {
   connected: boolean;
@@ -9,17 +11,27 @@ interface DiscordStatus {
   lastError?: string | null;
 }
 
+function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span className={`status-badge${ok ? " ok" : ""}`}>
+      <span className="status-dot" aria-hidden />
+      {label}
+    </span>
+  );
+}
+
 export function SettingsPage() {
   const { settings, save } = useSettings();
-  const [form, setForm] = useState<AppSettings>(settings);
+  const [form, setForm] = useState<AppSettings>({ ...settings, lastFmPassword: "" });
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [connectingLastFm, setConnectingLastFm] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [discord, setDiscord] = useState<DiscordStatus | null>(null);
 
   useEffect(() => {
-    setForm(settings);
+    setForm((prev) => ({ ...prev, ...settings, lastFmPassword: prev.lastFmPassword }));
   }, [settings]);
 
   useEffect(() => {
@@ -57,7 +69,6 @@ export function SettingsPage() {
     setError(null);
     setMessage(null);
     try {
-      // Persist current Discord fields first so the backend uses them.
       await save({
         ...form,
         serverUrl: form.serverUrl.trim(),
@@ -77,126 +88,231 @@ export function SettingsPage() {
     }
   }
 
+  async function onConnectLastFm() {
+    setConnectingLastFm(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const sessionKey = await getLastFmSession(
+        form.lastFmApiKey,
+        form.lastFmApiSecret,
+        form.lastFmUsername,
+        form.lastFmPassword,
+      );
+      const saved = await save({
+        ...form,
+        serverUrl: form.serverUrl.trim(),
+        lastFmSessionKey: sessionKey,
+        lastFmScrobbleEnabled: true,
+      });
+      setForm({ ...saved, lastFmPassword: "" });
+      setMessage("Last.fm connected. Scrobbling is enabled.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setConnectingLastFm(false);
+    }
+  }
+
+  const lastFmConnected = Boolean(form.lastFmSessionKey.trim());
+
   return (
-    <div>
+    <div className="settings-page">
       <h1 className="section-title">Settings</h1>
-      <p className="section-sub">Server connection and Discord Rich Presence.</p>
-      <div className="panel">
-        <form className="form" onSubmit={onSubmit}>
-          <label>
-            Server URL
-            <input
-              type="url"
-              required
-              placeholder={SERVER_URL_EXAMPLE}
-              value={form.serverUrl}
-              onChange={(e) => setForm({ ...form, serverUrl: e.target.value })}
-            />
-          </label>
-          <label>
-            Username
-            <input
-              type="text"
-              required
-              value={form.username}
-              onChange={(e) => setForm({ ...form, username: e.target.value })}
-            />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              required
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-            />
-          </label>
+      <p className="section-sub">Server, scrobbling, and integrations.</p>
 
-          <hr style={{ border: 0, borderTop: "1px solid var(--border)", margin: "0.25rem 0" }} />
+      <form className="settings-stack" onSubmit={onSubmit}>
+        <section className="settings-card">
+          <header className="settings-card-head">
+            <h2>Navidrome</h2>
+            <p className="muted">Your music server connection.</p>
+          </header>
+          <div className="form">
+            <label>
+              Server URL
+              <input
+                type="url"
+                required
+                placeholder={SERVER_URL_EXAMPLE}
+                value={form.serverUrl}
+                onChange={(e) => setForm({ ...form, serverUrl: e.target.value })}
+              />
+            </label>
+            <label>
+              Username
+              <input
+                type="text"
+                required
+                value={form.username}
+                onChange={(e) => setForm({ ...form, username: e.target.value })}
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                required
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+              />
+            </label>
+          </div>
+        </section>
 
-          <label className="toggle-row">
-            <span>
-              <strong>Show what I am listening to on Discord</strong>
-              <div className="muted" style={{ fontSize: "0.85rem", marginTop: 4 }}>
-                Requires Discord desktop running. Create an Application in the Discord Developer
-                Portal, paste its Client ID below, and upload a Rich Presence art asset named
-                app_logo.
-              </div>
-            </span>
-            <input
-              type="checkbox"
-              checked={form.discordShowListening}
-              onChange={(e) =>
-                setForm({ ...form, discordShowListening: e.target.checked })
-              }
-            />
-          </label>
+        <section className="settings-card">
+          <header className="settings-card-head">
+            <div className="settings-card-title-row">
+              <h2>Discord</h2>
+              {discord && (
+                <StatusBadge
+                  ok={discord.connected}
+                  label={discord.connected ? "Connected" : "Not connected"}
+                />
+              )}
+            </div>
+            <p className="muted">Rich Presence while you listen.</p>
+          </header>
 
-          <label>
-            Discord Application Client ID
-            <input
-              type="text"
-              placeholder="Application ID from Discord Developer Portal"
-              value={form.discordClientId}
-              onChange={(e) => setForm({ ...form, discordClientId: e.target.value })}
-            />
-          </label>
+          <ToggleSwitch
+            checked={form.discordShowListening}
+            onChange={(discordShowListening) => setForm({ ...form, discordShowListening })}
+            label="Show what I'm listening to"
+            description="Requires Discord desktop. Create an app in the Developer Portal and paste its Client ID below."
+          />
 
-          <label>
-            Fallback large image asset key
-            <input
-              type="text"
-              value={form.discordFallbackImageKey}
-              onChange={(e) =>
-                setForm({ ...form, discordFallbackImageKey: e.target.value })
-              }
-            />
-          </label>
-
-          <label>
-            Last.fm API key
-            <input
-              type="text"
-              placeholder="For Discord album art (album.getinfo)"
-              value={form.lastFmApiKey}
-              onChange={(e) => setForm({ ...form, lastFmApiKey: e.target.value })}
-            />
-          </label>
-          <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
-            Create an API account at{" "}
-            <a href="https://www.last.fm/api/account/create" target="_blank" rel="noreferrer">
-              last.fm/api
-            </a>{" "}
-            and paste the API key. Discord uses the public Last.fm cover URL.
-          </p>
-
-          {discord && (
-            <p className="muted" style={{ margin: 0 }}>
-              Discord: {discord.connected ? "connected" : "not connected"}
-              {discord.lastError ? ` - ${discord.lastError}` : ""}
+          <div className={`settings-fields${form.discordShowListening ? "" : " collapsed"}`}>
+            <label>
+              Application Client ID
+              <input
+                type="text"
+                placeholder="From Discord Developer Portal"
+                value={form.discordClientId}
+                onChange={(e) => setForm({ ...form, discordClientId: e.target.value })}
+              />
+            </label>
+            <label>
+              Fallback image asset key
+              <input
+                type="text"
+                value={form.discordFallbackImageKey}
+                onChange={(e) =>
+                  setForm({ ...form, discordFallbackImageKey: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              Last.fm API key
+              <input
+                type="text"
+                placeholder="Optional — for album art in Discord"
+                value={form.lastFmApiKey}
+                onChange={(e) => setForm({ ...form, lastFmApiKey: e.target.value })}
+              />
+            </label>
+            <p className="field-hint muted">
+              Upload a square image named <code>app_logo</code> under Rich Presence → Art Assets.
+              Last.fm keys come from{" "}
+              <a href="https://www.last.fm/api/account/create" target="_blank" rel="noreferrer">
+                last.fm/api
+              </a>
+              .
             </p>
-          )}
-
-          {error && <p className="error">{error}</p>}
-          {message && <p className="muted">{message}</p>}
-
-          <div className="form-actions">
-            <button className="btn" type="submit" disabled={saving}>
-              {saving ? "Saving..." : "Save settings"}
-            </button>
+            {discord?.lastError && (
+              <p className="error compact">{discord.lastError}</p>
+            )}
             <button
               className="btn secondary"
               type="button"
               disabled={testing || !form.discordClientId.trim()}
               onClick={() => void onTestDiscord()}
             >
-              {testing ? "Testing..." : "Test Discord"}
+              {testing ? "Testing…" : "Test Discord"}
             </button>
           </div>
-        </form>
-      </div>
+        </section>
 
-      <section className="panel shortcuts">
+        <section className="settings-card">
+          <header className="settings-card-head">
+            <div className="settings-card-title-row">
+              <h2>Last.fm</h2>
+              <StatusBadge
+                ok={lastFmConnected}
+                label={lastFmConnected ? "Connected" : "Not connected"}
+              />
+            </div>
+            <p className="muted">Scrobble plays to your Last.fm profile.</p>
+          </header>
+
+          <ToggleSwitch
+            checked={form.lastFmScrobbleEnabled}
+            onChange={(lastFmScrobbleEnabled) => setForm({ ...form, lastFmScrobbleEnabled })}
+            label="Enable scrobbling"
+            description="Sends now playing and scrobbles when you've listened long enough."
+            disabled={!lastFmConnected}
+          />
+
+          <div className="settings-fields">
+            <label>
+              API key
+              <input
+                type="text"
+                value={form.lastFmApiKey}
+                onChange={(e) => setForm({ ...form, lastFmApiKey: e.target.value })}
+              />
+            </label>
+            <label>
+              Shared secret
+              <input
+                type="password"
+                value={form.lastFmApiSecret}
+                onChange={(e) => setForm({ ...form, lastFmApiSecret: e.target.value })}
+              />
+            </label>
+            <label>
+              Username
+              <input
+                type="text"
+                value={form.lastFmUsername}
+                onChange={(e) => setForm({ ...form, lastFmUsername: e.target.value })}
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                placeholder={lastFmConnected ? "Leave blank to keep session" : "Last.fm password"}
+                value={form.lastFmPassword}
+                onChange={(e) => setForm({ ...form, lastFmPassword: e.target.value })}
+              />
+            </label>
+            <button
+              className="btn secondary"
+              type="button"
+              disabled={
+                connectingLastFm ||
+                !form.lastFmApiKey.trim() ||
+                !form.lastFmApiSecret.trim() ||
+                !form.lastFmUsername.trim() ||
+                !form.lastFmPassword
+              }
+              onClick={() => void onConnectLastFm()}
+            >
+              {connectingLastFm ? "Connecting…" : lastFmConnected ? "Reconnect Last.fm" : "Connect Last.fm"}
+            </button>
+          </div>
+        </section>
+
+        {error && <p className="error">{error}</p>}
+        {message && <p className="success-msg">{message}</p>}
+
+        <div className="form-actions">
+          <button className="btn" type="submit" disabled={saving}>
+            {saving ? "Saving…" : "Save settings"}
+          </button>
+        </div>
+      </form>
+
+      <section className="settings-card shortcuts">
         <h2 className="panel-title">Keyboard shortcuts</h2>
         <dl className="shortcut-list">
           {SHORTCUTS.map(([keys, label]) => (
@@ -210,9 +326,6 @@ export function SettingsPage() {
             </div>
           ))}
         </dl>
-        <p className="muted" style={{ margin: "0.9rem 0 0", fontSize: "0.85rem" }}>
-          Media keys and the Windows volume flyout control playback too.
-        </p>
       </section>
     </div>
   );
@@ -230,4 +343,5 @@ const SHORTCUTS: [string[], string][] = [
   [["R"], "Repeat mode"],
   [["F"], "Favorite current song"],
   [["Q"], "Playing Next panel"],
+  [["Y"], "Lyrics panel"],
 ];

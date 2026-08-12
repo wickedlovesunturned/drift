@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate, useSearchParams } from "react-router-dom"
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { PlayerBar } from "../player/PlayerBar";
 import { PlayingNext } from "../player/PlayingNext";
+import { LyricsPanel } from "../lyrics/LyricsPanel";
 import { VolumeOsd } from "../player/VolumeOsd";
 import { usePlayer } from "../player/PlayerContext";
 import { useKeyboardShortcuts } from "../player/useKeyboardShortcuts";
@@ -10,7 +11,7 @@ import { APP_NAME } from "../../lib/constants";
 import { ResizeHandle, clamp, usePersistedWidth } from "./ResizeHandle";
 
 export function AppShell() {
-  const { queuePanelOpen, current } = usePlayer();
+  const { queuePanelOpen, lyricsPanelOpen, current } = usePlayer();
   const { toggleFavorite } = useFavorites();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -51,7 +52,7 @@ export function AppShell() {
 
   return (
     <div
-      className={`app-shell${queuePanelOpen ? " queue-open" : " queue-closed"}`}
+      className={`app-shell${queuePanelOpen ? " queue-open" : " queue-closed"}${lyricsPanelOpen ? " lyrics-open" : ""}`}
       style={
         {
           "--nav-w": `${navWidth}px`,
@@ -136,7 +137,7 @@ export function AppShell() {
       <ResizeHandle onDrag={onNavDrag} ariaLabel="Resize sidebar" />
 
       <main className="main">
-        <Outlet />
+        {lyricsPanelOpen ? <LyricsPanel /> : <Outlet />}
       </main>
 
       {queuePanelOpen && (

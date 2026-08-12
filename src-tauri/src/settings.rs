@@ -15,6 +15,14 @@ pub struct AppSettings {
     pub discord_fallback_image_key: String,
     #[serde(default)]
     pub last_fm_api_key: String,
+    #[serde(default)]
+    pub last_fm_api_secret: String,
+    #[serde(default)]
+    pub last_fm_username: String,
+    #[serde(default)]
+    pub last_fm_session_key: String,
+    #[serde(default)]
+    pub last_fm_scrobble_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,6 +36,14 @@ pub struct SettingsPayload {
     pub discord_fallback_image_key: String,
     #[serde(default)]
     pub last_fm_api_key: String,
+    #[serde(default)]
+    pub last_fm_api_secret: String,
+    #[serde(default)]
+    pub last_fm_username: String,
+    #[serde(default)]
+    pub last_fm_session_key: String,
+    #[serde(default)]
+    pub last_fm_scrobble_enabled: bool,
 }
 
 fn config_path() -> Result<PathBuf, String> {
@@ -89,6 +105,10 @@ pub fn get_settings() -> Result<SettingsPayload, String> {
         discord_show_listening: file.discord_show_listening,
         discord_fallback_image_key: file.discord_fallback_image_key,
         last_fm_api_key: file.last_fm_api_key,
+        last_fm_api_secret: file.last_fm_api_secret,
+        last_fm_username: file.last_fm_username,
+        last_fm_session_key: file.last_fm_session_key,
+        last_fm_scrobble_enabled: file.last_fm_scrobble_enabled,
     })
 }
 
@@ -104,6 +124,10 @@ pub fn set_settings(payload: SettingsPayload) -> Result<SettingsPayload, String>
             payload.discord_fallback_image_key.trim().to_string()
         },
         last_fm_api_key: payload.last_fm_api_key.trim().to_string(),
+        last_fm_api_secret: payload.last_fm_api_secret.trim().to_string(),
+        last_fm_username: payload.last_fm_username.trim().to_string(),
+        last_fm_session_key: payload.last_fm_session_key.trim().to_string(),
+        last_fm_scrobble_enabled: payload.last_fm_scrobble_enabled,
     };
     save_file_settings(&settings)?;
     save_password(&payload.password)?;

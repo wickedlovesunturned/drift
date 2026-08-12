@@ -14,6 +14,7 @@ import { PlaylistPage } from "./features/library/PlaylistPage";
 import { SearchPage } from "./features/library/SearchPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { useDiscordPresence } from "./features/discord/useDiscordPresence";
+import { useLastFmScrobble } from "./features/lastfm/useLastFmScrobble";
 import { APP_NAME } from "./lib/constants";
 
 function SessionRouteSync() {
@@ -43,6 +44,7 @@ function SessionRouteSync() {
 export default function App() {
   const { loading, configured } = useSettings();
   useDiscordPresence();
+  useLastFmScrobble();
 
   return (
     <div className="app-root">
