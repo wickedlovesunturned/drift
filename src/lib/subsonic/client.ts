@@ -213,14 +213,47 @@ function base(auth: AuthConfig): string {
   return auth.serverUrl.replace(/\/+$/, "");
 }
 
+async function navidromeToken(auth: AuthConfig): Promise<string> {
+  const url = `${base(auth)}/auth/login`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username: auth.username,
+      password: auth.password,
+    }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} calling auth/login`);
+  const json = await res.json();
+  const token = json?.token ?? json?.data?.token;
+  if (!token || typeof token !== "string") {
+    throw new Error("Navidrome authentication token was not returned");
+  }
+  return token;
+}
+
 async function request<T>(
   auth: AuthConfig,
   endpoint: string,
-  extra: Record<string, string | number | undefined> = {},
+  extra: Record<
+    string,
+    string | number | boolean | Array<string | number | boolean> | undefined | null
+  > = {},
+  options: { keepEmptyStrings?: boolean } = {},
 ): Promise<T> {
   const params = await buildAuthParams(auth);
   for (const [k, v] of Object.entries(extra)) {
-    if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+    if (v == null) continue;
+    if (v === "" && !options.keepEmptyStrings) continue;
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        if (item !== undefined && item !== null && (item !== "" || options.keepEmptyStrings)) {
+          params.append(k, String(item));
+        }
+      }
+      continue;
+    }
+    params.set(k, String(v));
   }
   const url = `${base(auth)}/rest/${endpoint}.view?${params.toString()}`;
   const res = await fetch(url);
@@ -314,6 +347,102 @@ export async function getPlaylist(
   return root.playlist;
 }
 
+export async function createPlaylist(
+  auth: AuthConfig,
+  name: string,
+  songIds: string[] = [],
+): Promise<Playlist> {
+  const root = await request<{ playlist?: Playlist }>(auth, "createPlaylist", {
+    name,
+    ...(songIds.length ? { songId: songIds } : {}),
+  });
+  if (!root.playlist) throw new Error("Playlist was not created");
+  return root.playlist;
+}
+
+export async function updatePlaylist(
+  auth: AuthConfig,
+  playlistId: string,
+  updates: { name?: string; comment?: string; public?: boolean },
+): Promise<void> {
+  await request(auth, "updatePlaylist", {
+    playlistId,
+    name: updates.name,
+    comment: updates.comment,
+    public: updates.public,
+  }, { keepEmptyStrings: true });
+}
+
+export async function addSongsToPlaylist(
+  auth: AuthConfig,
+  playlistId: string,
+  songIds: string[],
+): Promise<void> {
+  if (!songIds.length) return;
+  await request(auth, "updatePlaylist", {
+    playlistId,
+    songIdToAdd: songIds,
+  });
+}
+
+export async function setPlaylistSongs(
+  auth: AuthConfig,
+  playlistId: string,
+  songIds: string[],
+): Promise<void> {
+  await request(auth, "createPlaylist", {
+    playlistId,
+    songId: songIds,
+  });
+}
+
+export async function deletePlaylist(auth: AuthConfig, id: string): Promise<void> {
+  await request(auth, "deletePlaylist", { id });
+}
+
+export async function uploadPlaylistCover(
+  auth: AuthConfig,
+  playlistId: string,
+  file: File,
+): Promise<void> {
+  const token = await navidromeToken(auth);
+  const form = new FormData();
+  form.append("image", file);
+  const res = await fetch(`${base(auth)}/api/playlist/${encodeURIComponent(playlistId)}/image`, {
+    method: "POST",
+    headers: {
+      // Navidrome native API only reads X-ND-Authorization (Bearer <jwt>).
+      "X-ND-Authorization": `Bearer ${token}`,
+    },
+    body: form,
+  });
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      throw new Error("Not allowed to upload playlist cover on this server");
+    }
+    if (res.status === 400) {
+      throw new Error("Cover must be JPEG, PNG, GIF, or WebP (max 10 MB)");
+    }
+    throw new Error(`HTTP ${res.status} uploading playlist image`);
+  }
+}
+
+export async function deletePlaylistCover(auth: AuthConfig, playlistId: string): Promise<void> {
+  const token = await navidromeToken(auth);
+  const res = await fetch(`${base(auth)}/api/playlist/${encodeURIComponent(playlistId)}/image`, {
+    method: "DELETE",
+    headers: {
+      "X-ND-Authorization": `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      throw new Error("Not allowed to remove playlist cover on this server");
+    }
+    throw new Error(`HTTP ${res.status} removing playlist image`);
+  }
+}
+
 export async function search3(auth: AuthConfig, query: string) {
   const root = await request<{
     searchResult3?: { artist?: Artist[]; album?: Album[]; song?: Song[] };
@@ -351,11 +480,13 @@ export async function coverArtUrl(
   auth: AuthConfig,
   id: string | undefined,
   size = 300,
+  cacheBust?: number | string,
 ): Promise<string | undefined> {
   if (!id) return undefined;
   const params = await buildAuthParams(auth);
   params.set("id", id);
   params.set("size", String(size));
+  if (cacheBust != null && cacheBust !== "") params.set("_", String(cacheBust));
   return `${base(auth)}/rest/getCoverArt.view?${params.toString()}`;
 }
 
