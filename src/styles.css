@@ -60,6 +60,34 @@ body {
   color: var(--text);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(153, 152, 204, 0.45) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(153, 152, 204, 0.35);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(198, 197, 238, 0.7);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 button,
@@ -91,7 +119,7 @@ a {
 
 .titlebar {
   display: grid;
-  grid-template-columns: minmax(92px, 1fr) auto minmax(92px, 1fr);
+  grid-template-columns: minmax(92px, 1fr) auto minmax(138px, 1fr);
   align-items: center;
   height: var(--titlebar-h);
   /* Matches .player-bar with no divider so the two read as one surface. */
@@ -104,6 +132,7 @@ a {
   display: flex;
   align-items: center;
   gap: 0.1rem;
+  height: 100%;
   padding-left: 6px;
 }
 
@@ -129,7 +158,7 @@ a {
   cursor: default;
 }
 
-.titlebar-drag {
+.titlebar-brand {
   display: flex;
   align-items: center;
   justify-content: center;

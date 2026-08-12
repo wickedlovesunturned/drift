@@ -41,8 +41,8 @@ export function TitleBar({ showNav }: { showNav: boolean }) {
   }, [appWindow]);
 
   return (
-    <div className="titlebar">
-      <div className="titlebar-nav">
+    <div className="titlebar" data-tauri-drag-region>
+      <div className="titlebar-nav" data-tauri-drag-region>
         {showNav && (
           <>
             <button
@@ -69,13 +69,14 @@ export function TitleBar({ showNav }: { showNav: boolean }) {
         )}
       </div>
 
-      <div className="titlebar-drag" data-tauri-drag-region>
+      <div className="titlebar-brand" data-tauri-drag-region>
         <img className="titlebar-mark" src="/logo.png" alt="" data-tauri-drag-region />
         <span className="titlebar-title" data-tauri-drag-region>
           {APP_NAME}
         </span>
       </div>
 
+      {/* No drag-region here so window controls keep reliable click targets. */}
       <div className="titlebar-controls">
         <button
           type="button"
