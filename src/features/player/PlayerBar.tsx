@@ -105,7 +105,7 @@ export function PlayerBar() {
           ) : (
             <div className="cover-fallback now-cover" />
           )}
-          <div className="now-module-text">
+          <div className="now-module-text" key={current?.id ?? "idle"}>
             <div className="now-title-row">
               <span className="title">{current?.title ?? APP_NAME}</span>
               <NowPlayingMenu />

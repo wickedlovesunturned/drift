@@ -76,8 +76,9 @@ export function TitleBar({ showNav }: { showNav: boolean }) {
         </span>
       </div>
 
-      {/* No drag-region here so window controls keep reliable click targets. */}
-      <div className="titlebar-controls">
+      {/* Spacer is draggable; window buttons stay no-drag via CSS. */}
+      <div className="titlebar-controls" data-tauri-drag-region>
+        <div className="titlebar-drag-spacer" data-tauri-drag-region />
         <button
           type="button"
           className="win-btn"

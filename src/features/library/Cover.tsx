@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Album, Playlist } from "../../lib/subsonic/client";
 
@@ -10,8 +11,29 @@ export function Cover({
   className?: string;
   alt?: string;
 }) {
-  const classes = ["album-art", className].filter(Boolean).join(" ");
-  if (src) return <img className={classes} src={src} alt={alt} loading="lazy" />;
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    setLoaded(false);
+  }, [src]);
+
+  const classes = ["album-art", loaded ? "is-loaded" : "", className]
+    .filter(Boolean)
+    .join(" ");
+  if (src) {
+    return (
+      <img
+        className={classes}
+        src={src}
+        alt={alt}
+        loading="lazy"
+        onLoad={() => setLoaded(true)}
+        ref={(el) => {
+          if (el?.complete && el.naturalWidth > 0 && !loaded) setLoaded(true);
+        }}
+      />
+    );
+  }
   return <div className={`cover-fallback ${classes}`} aria-hidden />;
 }
 

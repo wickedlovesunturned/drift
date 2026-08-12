@@ -1,6 +1,7 @@
 import { usePlayer } from "./PlayerContext";
 import { Cover } from "../library/Cover";
 import { formatDuration } from "../../lib/subsonic/client";
+import { IconClose } from "./icons";
 
 export function PlayingNext() {
   const {
@@ -36,14 +37,7 @@ export function PlayingNext() {
           aria-label="Hide Playing Next"
           title="Hide"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-            <path
-              d="M6 6l12 12M18 6L6 18"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            />
-          </svg>
+          <IconClose size={16} />
         </button>
       </div>
       {upcoming.length === 0 ? (
@@ -74,7 +68,7 @@ export function PlayingNext() {
                     title="Remove (Delete)"
                     onClick={() => removeFromQueue(absoluteIndex)}
                   >
-                    ×
+                    <IconClose size={12} />
                   </button>
                 </div>
               </li>

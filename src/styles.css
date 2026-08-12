@@ -62,6 +62,16 @@ body {
   -webkit-font-smoothing: antialiased;
   scrollbar-width: thin;
   scrollbar-color: rgba(153, 152, 204, 0.45) transparent;
+  /* App chrome — labels stay unselectable; inputs still allow typing/selection. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 *::-webkit-scrollbar {
@@ -146,6 +156,8 @@ a {
   background: transparent;
   color: #cfcee0;
   cursor: pointer;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .titlebar-nav-btn:hover:not(:disabled) {
@@ -187,6 +199,13 @@ a {
   height: 100%;
 }
 
+/* Empty space left of the window buttons — keeps the right column draggable. */
+.titlebar-drag-spacer {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
 .win-btn {
   display: grid;
   place-items: center;
@@ -196,6 +215,9 @@ a {
   background: transparent;
   color: #d6d5e4;
   cursor: pointer;
+  /* Ensure buttons remain clickable inside a drag region parent. */
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .win-btn:hover {
@@ -362,7 +384,7 @@ a {
   padding: 0.55rem 0.7rem;
   border-radius: var(--radius-art);
   color: var(--muted);
-  transition: background 140ms ease, color 140ms ease;
+  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
 }
 
 .nav-link.sub {
@@ -389,6 +411,10 @@ a {
   background: var(--bg);
 }
 
+.main > * {
+  animation: page-in 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 .playing-next {
   grid-row: 2;
   border-left: 1px solid var(--border);
@@ -396,6 +422,7 @@ a {
   padding: 1.1rem 0.9rem 1rem;
   overflow: auto;
   min-width: 0;
+  animation: panel-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .playing-next-header {
@@ -506,6 +533,7 @@ a {
   min-height: var(--player-h);
   box-sizing: border-box;
   overflow: visible;
+  z-index: 10;
 }
 
 .player-bar.am-bar .transport-controls {
@@ -522,6 +550,7 @@ a {
   min-width: 0;
   background: rgba(255, 255, 255, 0.06);
   border-radius: var(--radius);
+  /* Menu is portaled to body, so we can clip the progress bar to the card. */
   overflow: hidden;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   position: relative;
@@ -605,10 +634,7 @@ a {
 }
 
 .now-menu-dropdown {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 40;
+  z-index: 2000;
   min-width: 190px;
   padding: 0.35rem;
   border-radius: 12px;
@@ -618,6 +644,13 @@ a {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
+}
+
+.now-menu-dropdown.now-menu-portal {
+  position: fixed;
+  /* Escape player grid clipping entirely. */
+  animation: menu-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform-origin: bottom right;
 }
 
 .now-menu-dropdown button {
@@ -630,6 +663,7 @@ a {
   font: inherit;
   font-size: 0.86rem;
   cursor: pointer;
+  width: 100%;
 }
 
 .now-menu-dropdown button:hover {
@@ -666,6 +700,8 @@ a {
   bottom: 0;
   height: 3px;
   background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  border-radius: 0 0 var(--radius) var(--radius);
 }
 
 .now-progress .progress-range {
@@ -770,7 +806,11 @@ a {
 }
 
 .album-tile:hover {
-  transform: translateY(-2px);
+  transform: translateY(-4px);
+}
+
+.album-tile:hover .album-art {
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);
 }
 
 .album-art,
@@ -784,6 +824,15 @@ a {
   background: var(--surface);
   display: block;
   box-shadow: var(--shadow);
+  transition: box-shadow 220ms ease, opacity 280ms ease, transform 220ms ease;
+}
+
+img.album-art {
+  opacity: 0;
+}
+
+img.album-art.is-loaded {
+  opacity: 1;
 }
 
 .album-tile .meta {
@@ -895,13 +944,39 @@ a {
 }
 
 .artist-row {
-  display: block;
-  padding: 0.7rem 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.4rem;
   border-bottom: 1px solid var(--border);
 }
 
 .artist-row:hover {
   background: rgba(255, 255, 255, 0.03);
+}
+
+.artist-row-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--surface);
+}
+
+.artist-row-avatar.placeholder {
+  background: linear-gradient(135deg, #2a2a3a, #171722);
+}
+
+.artist-row-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.artist-row-meta .name {
+  font-weight: 600;
 }
 
 .panel a {
@@ -966,6 +1041,7 @@ a {
 
 .shortcut dt {
   display: flex;
+  align-items: center;
   gap: 0.25rem;
   flex-shrink: 0;
 }
@@ -974,6 +1050,7 @@ a {
   margin: 0;
   color: var(--muted);
   font-size: 0.88rem;
+  line-height: 1.2;
 }
 
 kbd {
@@ -1040,7 +1117,7 @@ kbd {
   color: #fff;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 140ms ease, filter 140ms ease;
+  transition: transform 140ms ease, filter 140ms ease, box-shadow 160ms ease;
 }
 
 .btn:hover {
@@ -1056,8 +1133,32 @@ kbd {
 
 .form-actions {
   display: flex;
+  justify-content: center;
   gap: 0.65rem;
   flex-wrap: wrap;
+  margin-top: 0.35rem;
+}
+
+.settings-save-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1.15rem 1.2rem;
+  margin-top: 0.25rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  position: relative;
+  z-index: 1;
+}
+
+.settings-save-bar .btn {
+  min-width: 180px;
+}
+
+.settings-page .settings-card.shortcuts {
+  margin-top: 1rem;
 }
 
 .btn.secondary {
@@ -1119,7 +1220,7 @@ kbd {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  transition: color 120ms ease, background 120ms ease;
+  transition: color 120ms ease, background 120ms ease, transform 120ms ease;
 }
 
 .icon-btn:hover {
@@ -1317,6 +1418,23 @@ kbd {
   border-radius: var(--radius);
   padding: 1.15rem 1.2rem 1.25rem;
   box-shadow: var(--shadow);
+  animation: card-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.settings-stack > .settings-card:nth-child(1) {
+  animation-delay: 40ms;
+}
+.settings-stack > .settings-card:nth-child(2) {
+  animation-delay: 90ms;
+}
+.settings-stack > .settings-card:nth-child(3) {
+  animation-delay: 140ms;
+}
+.settings-stack > .settings-save-bar {
+  animation: card-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) 180ms both;
+}
+.settings-page > .settings-card.shortcuts {
+  animation: card-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) 220ms both;
 }
 
 .settings-card-head {
@@ -1342,6 +1460,30 @@ kbd {
   flex-direction: column;
   gap: 0.85rem;
   margin-top: 0.85rem;
+}
+
+.settings-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.settings-fields input[type="text"],
+.settings-fields input[type="password"],
+.settings-fields input[type="url"] {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.75rem 0.85rem;
+  width: 100%;
+}
+
+.settings-fields input:focus {
+  outline: 2px solid rgba(153, 152, 204, 0.45);
+  border-color: transparent;
 }
 
 .settings-fields.collapsed {
@@ -1392,7 +1534,7 @@ kbd {
   background: rgba(255, 255, 255, 0.12);
   position: relative;
   cursor: pointer;
-  transition: background 160ms ease;
+  transition: background 160ms ease, transform 120ms ease;
   margin-top: 0.15rem;
 }
 
@@ -1532,6 +1674,15 @@ kbd {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.2rem;
+}
+
+.icon-btn.tiny {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  line-height: 0;
 }
 
 .next-remove {
@@ -1873,5 +2024,109 @@ kbd {
 
   .playlist-stats {
     grid-template-columns: 1fr;
+  }
+}
+
+/* --- Motion --- */
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes now-swap {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.now-module-text .title,
+.now-module-text .artist {
+  animation: now-swap 200ms ease;
+}
+
+.icon-btn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.btn:hover:not(:disabled) {
+  box-shadow: 0 8px 20px rgba(43, 42, 94, 0.45);
+}
+
+.nav-link:hover {
+  transform: translateX(2px);
+}
+
+.similar-row,
+.artist-row,
+.track-row,
+.playing-next-row {
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.similar-row:hover,
+.artist-row:hover {
+  transform: translateX(3px);
+}
+
+.switch:active {
+  transform: scale(0.96);
+}
+
+.artist-hero {
+  animation: page-in 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

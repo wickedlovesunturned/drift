@@ -4,8 +4,10 @@ import { useSettings } from "../settings/SettingsContext";
 import {
   coverArtUrl,
   getArtist,
+  getArtistInfo2,
   type Album,
   type Artist,
+  type ArtistInfo,
 } from "../../lib/subsonic/client";
 import {
   fetchLastFmArtistInfo,
@@ -16,6 +18,13 @@ import { AlbumCard } from "./Cover";
 import { usePlayer, type PlayerTrack } from "../player/PlayerContext";
 import { getAlbum } from "../../lib/subsonic/client";
 
+type SimilarArtist = {
+  name: string;
+  id?: string;
+  image?: string;
+  url?: string;
+};
+
 export function ArtistPage() {
   const { id } = useParams();
   const { auth, settings } = useSettings();
@@ -23,7 +32,9 @@ export function ArtistPage() {
   const [artist, setArtist] = useState<(Artist & { album?: Album[] }) | null>(null);
   const [covers, setCovers] = useState<Record<string, string>>({});
   const [heroCover, setHeroCover] = useState<string | undefined>();
+  const [artistPhoto, setArtistPhoto] = useState<string | undefined>();
   const [lastFm, setLastFm] = useState<LastFmArtistInfo | null>(null);
+  const [similar, setSimilar] = useState<SimilarArtist[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -44,15 +55,64 @@ export function ArtistPage() {
         const hero = first
           ? await coverArtUrl(auth, first.coverArt ?? first.id, 800)
           : await coverArtUrl(auth, data.coverArt, 800);
+
+        let info: ArtistInfo | null = null;
+        try {
+          info = await getArtistInfo2(auth, id);
+        } catch {
+          info = null;
+        }
+
+        const photo =
+          info?.largeImageUrl ||
+          info?.mediumImageUrl ||
+          info?.smallImageUrl ||
+          (await coverArtUrl(auth, data.coverArt, 800));
+
+        const similarFromServer: SimilarArtist[] = await Promise.all(
+          (info?.similarArtist ?? []).slice(0, 8).map(async (s) => {
+            const image =
+              s.artistImageUrl ||
+              (await coverArtUrl(auth, s.coverArt ?? s.id, 120)) ||
+              undefined;
+            return { name: s.name, id: s.id, image };
+          }),
+        );
+
         if (!cancelled) {
           setArtist(data);
           setCovers(map);
           setHeroCover(hero);
+          setArtistPhoto(photo);
+          if (similarFromServer.length) setSimilar(similarFromServer);
         }
 
         if (settings.lastFmApiKey.trim() && data.name) {
-          const info = await fetchLastFmArtistInfo(settings.lastFmApiKey, data.name);
-          if (!cancelled) setLastFm(info);
+          const lf = await fetchLastFmArtistInfo(settings.lastFmApiKey, data.name);
+          if (!cancelled) {
+            setLastFm(lf);
+            // Prefer Subsonic similar (with covers); fall back to Last.fm photos.
+            if (!similarFromServer.length && lf?.similar.length) {
+              setSimilar(
+                lf.similar.slice(0, 8).map((s) => ({
+                  name: s.name,
+                  url: s.url,
+                  image: s.image,
+                })),
+              );
+            } else if (similarFromServer.length && lf?.similar.length) {
+              // Fill any missing photos from Last.fm by name.
+              const byName = new Map(
+                lf.similar.map((s) => [s.name.toLowerCase(), s.image]),
+              );
+              setSimilar(
+                similarFromServer.map((s) => ({
+                  ...s,
+                  image: s.image || byName.get(s.name.toLowerCase()),
+                })),
+              );
+            }
+          }
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -93,7 +153,7 @@ export function ArtistPage() {
   if (error) return <p className="error">{error}</p>;
   if (!artist) return <p className="muted">Loading artist…</p>;
 
-  const banner = lastFm?.image || heroCover;
+  const banner = artistPhoto || lastFm?.image || heroCover;
 
   return (
     <div className="artist-page">
@@ -172,15 +232,19 @@ export function ArtistPage() {
           </section>
         </div>
 
-        {lastFm && lastFm.similar.length > 0 && (
+        {similar.length > 0 && (
           <aside className="artist-aside">
             <h2>Similar artists</h2>
             <ul className="similar-list">
-              {lastFm.similar.slice(0, 8).map((s) => (
-                <li key={s.name}>
+              {similar.map((s) => (
+                <li key={s.id ?? s.name}>
                   <Link
                     className="similar-row"
-                    to={`/search?q=${encodeURIComponent(s.name)}`}
+                    to={
+                      s.id
+                        ? `/artist/${s.id}`
+                        : `/search?q=${encodeURIComponent(s.name)}`
+                    }
                   >
                     {s.image ? (
                       <img src={s.image} alt="" className="similar-avatar" />

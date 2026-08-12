@@ -196,10 +196,14 @@ export interface LastFmArtistInfo {
 function pickImage(images?: { size?: string; ["#text"]?: string }[]): string | undefined {
   if (!images?.length) return undefined;
   const preferred = ["mega", "extralarge", "large", "medium"];
+  // Last.fm's generic star silhouette — treat as "no image".
+  const PLACEHOLDER = "2a96cbd8b46e442fc41c2b86b821562f";
   for (const size of preferred) {
     const img = images.find((i) => i.size === size);
     const url = img?.["#text"]?.trim();
-    if (url && url.startsWith("http")) return url.replace(/^http:\/\//i, "https://");
+    if (url && url.startsWith("http") && !url.includes(PLACEHOLDER)) {
+      return url.replace(/^http:\/\//i, "https://");
+    }
   }
   return undefined;
 }

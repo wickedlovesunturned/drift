@@ -48,6 +48,8 @@ export interface Artist {
   name: string;
   albumCount?: number;
   coverArt?: string;
+  /** External image URL when the server provides one (OpenSubsonic / Navidrome). */
+  artistImageUrl?: string;
 }
 
 function randomSalt(len = 12): string {
@@ -271,6 +273,29 @@ export async function getArtist(
   });
   if (!root.artist) throw new Error("Artist not found");
   return root.artist;
+}
+
+export interface ArtistInfo {
+  biography?: string;
+  musicBrainzId?: string;
+  lastFmUrl?: string;
+  smallImageUrl?: string;
+  mediumImageUrl?: string;
+  largeImageUrl?: string;
+  similarArtist?: Artist[];
+}
+
+/** External metadata + images (Last.fm / MusicBrainz via Navidrome). */
+export async function getArtistInfo2(auth: AuthConfig, id: string): Promise<ArtistInfo | null> {
+  try {
+    const root = await request<{ artistInfo2?: ArtistInfo }>(auth, "getArtistInfo2", {
+      id,
+      count: 8,
+    });
+    return root.artistInfo2 ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getPlaylists(auth: AuthConfig): Promise<Playlist[]> {

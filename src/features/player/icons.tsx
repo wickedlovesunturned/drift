@@ -163,3 +163,12 @@ export function IconMore({ size }: IconProps) {
     </Svg>
   );
 }
+
+export function IconClose({ size }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </Svg>
+  );
+}

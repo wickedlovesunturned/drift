@@ -300,7 +300,7 @@ export function SettingsPage() {
         {error && <p className="error">{error}</p>}
         {message && <p className="success-msg">{message}</p>}
 
-        <div className="form-actions">
+        <div className="settings-save-bar">
           <button className="btn" type="submit" disabled={saving}>
             {saving ? "Saving…" : "Save settings"}
           </button>

@@ -43,6 +43,14 @@ export function SearchPage() {
         const nextSongs = result.song ?? [];
         const map: Record<string, string> = {};
         await Promise.all([
+          ...nextArtists.map(async (a) => {
+            if (a.artistImageUrl) {
+              map[`artist:${a.id}`] = a.artistImageUrl;
+              return;
+            }
+            const url = await coverArtUrl(auth, a.coverArt ?? a.id, 120);
+            if (url) map[`artist:${a.id}`] = url;
+          }),
           ...nextAlbums.map(async (a) => {
             const url = await coverArtUrl(auth, a.coverArt ?? a.id, 300);
             if (url) map[`album:${a.id}`] = url;
@@ -138,16 +146,26 @@ export function SearchPage() {
         <section className="rail">
           <h2>Artists</h2>
           <ul className="artist-list">
-            {artists.map((artist) => (
-              <li key={artist.id}>
-                <Link className="artist-row" to={`/artist/${artist.id}`}>
-                  {artist.name}
-                  {artist.albumCount != null ? (
-                    <span className="muted"> · {artist.albumCount} albums</span>
-                  ) : null}
-                </Link>
-              </li>
-            ))}
+            {artists.map((artist) => {
+              const avatar = covers[`artist:${artist.id}`];
+              return (
+                <li key={artist.id}>
+                  <Link className="artist-row" to={`/artist/${artist.id}`}>
+                    {avatar ? (
+                      <img src={avatar} alt="" className="artist-row-avatar" />
+                    ) : (
+                      <div className="artist-row-avatar placeholder" />
+                    )}
+                    <span className="artist-row-meta">
+                      <span className="name">{artist.name}</span>
+                      {artist.albumCount != null ? (
+                        <span className="muted">{artist.albumCount} albums</span>
+                      ) : null}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}
