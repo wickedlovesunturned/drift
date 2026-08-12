@@ -64,7 +64,8 @@ Presence is off until you enable it, and it needs your own Discord application s
 belong to you.
 
 1. Open the [Discord Developer Portal](https://discord.com/developers/applications) and create a
-   **New Application**.
+   **New Application** (or rename an existing one to **drift** — Discord shows that application
+   name on your profile; the client ID is what drift uses).
 2. Copy the **Application ID** into Settings, under Discord Application Client ID.
 3. Open **Rich Presence -> Art Assets** and upload a square image named `app_logo` (or whatever you
    set as the fallback key).
