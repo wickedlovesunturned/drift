@@ -181,3 +181,93 @@ export function scrobbleThresholdMs(durationMs: number): number {
   if (durationMs < 30_000) return Number.POSITIVE_INFINITY;
   return Math.min(durationMs / 2, 240_000);
 }
+
+export interface LastFmArtistInfo {
+  name: string;
+  url?: string;
+  listeners?: string;
+  playcount?: string;
+  bio?: string;
+  tags: string[];
+  similar: { name: string; url?: string; image?: string }[];
+  image?: string;
+}
+
+function pickImage(images?: { size?: string; ["#text"]?: string }[]): string | undefined {
+  if (!images?.length) return undefined;
+  const preferred = ["mega", "extralarge", "large", "medium"];
+  for (const size of preferred) {
+    const img = images.find((i) => i.size === size);
+    const url = img?.["#text"]?.trim();
+    if (url && url.startsWith("http")) return url.replace(/^http:\/\//i, "https://");
+  }
+  return undefined;
+}
+
+export async function fetchLastFmArtistInfo(
+  apiKey: string,
+  artist: string,
+): Promise<LastFmArtistInfo | null> {
+  const key = apiKey.trim();
+  const name = artist.trim();
+  if (!key || !name) return null;
+
+  try {
+    const params = new URLSearchParams({
+      method: "artist.getinfo",
+      api_key: key,
+      artist: name,
+      autocorrect: "1",
+      format: "json",
+    });
+    const res = await fetch(`${API_BASE}?${params.toString()}`);
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      artist?: {
+        name?: string;
+        url?: string;
+        stats?: { listeners?: string; playcount?: string };
+        bio?: { content?: string; summary?: string };
+        tags?: { tag?: { name?: string }[] };
+        similar?: { artist?: { name?: string; url?: string; image?: { size?: string; ["#text"]?: string }[] }[] };
+        image?: { size?: string; ["#text"]?: string }[];
+      };
+      error?: number;
+    };
+    if (json.error || !json.artist) return null;
+    const a = json.artist;
+    if (!a.name) return null;
+    const artistName = a.name;
+    const summary = (a.bio?.summary || a.bio?.content || "")
+      .replace(/<a[^>]*>.*?<\/a>/gi, "")
+      .replace(/<[^>]+>/g, "")
+      .trim();
+
+    return {
+      name: artistName,
+      url: a.url,
+      listeners: a.stats?.listeners,
+      playcount: a.stats?.playcount,
+      bio: summary || undefined,
+      tags: (a.tags?.tag ?? []).map((t) => t.name).filter((t): t is string => Boolean(t)),
+      similar: (a.similar?.artist ?? []).map((s) => ({
+        name: s.name ?? "",
+        url: s.url,
+        image: pickImage(s.image),
+      })).filter((s) => s.name),
+      image: pickImage(a.image),
+    };
+  } catch (err) {
+    console.warn("[lastfm] artist info failed", err);
+    return null;
+  }
+}
+
+export function formatCompactCount(value?: string | number): string {
+  const n = typeof value === "string" ? Number(value) : value;
+  if (n == null || Number.isNaN(n)) return "—";
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+  return String(n);
+}

@@ -262,6 +262,17 @@ export async function getArtists(auth: AuthConfig): Promise<Artist[]> {
   return indexes.flatMap((i) => i.artist ?? []);
 }
 
+export async function getArtist(
+  auth: AuthConfig,
+  id: string,
+): Promise<Artist & { album?: Album[] }> {
+  const root = await request<{ artist?: Artist & { album?: Album[] } }>(auth, "getArtist", {
+    id,
+  });
+  if (!root.artist) throw new Error("Artist not found");
+  return root.artist;
+}
+
 export async function getPlaylists(auth: AuthConfig): Promise<Playlist[]> {
   const root = await request<{ playlists?: { playlist?: Playlist[] } }>(auth, "getPlaylists");
   return root.playlists?.playlist ?? [];

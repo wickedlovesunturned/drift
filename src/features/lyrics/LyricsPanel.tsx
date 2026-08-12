@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { usePlayer } from "../player/PlayerContext";
 import { useSettings } from "../settings/SettingsContext";
 import {
@@ -10,7 +11,13 @@ import {
 import { activeLineIndex } from "../../lib/lrc";
 import { Cover } from "../library/Cover";
 
-export function LyricsPanel() {
+interface LyricsPanelProps {
+  compact?: boolean;
+  fullscreen?: boolean;
+  onClose?: () => void;
+}
+
+export function LyricsPanel({ compact, fullscreen, onClose }: LyricsPanelProps) {
   const { auth } = useSettings();
   const { current, playing, positionMs, seek } = usePlayer();
   const [lyrics, setLyrics] = useState<TrackLyrics | null>(null);
@@ -70,14 +77,14 @@ export function LyricsPanel() {
 
   if (!current) {
     return (
-      <div className="lyrics-panel empty">
-        <p className="muted">Play something to see lyrics.</p>
+      <div className={`lyrics-panel empty${fullscreen ? " fullscreen" : ""}${compact ? " compact" : ""}`}>
+        <p className="muted">Play a song to see lyrics here.</p>
       </div>
     );
   }
 
   return (
-    <div className="lyrics-panel">
+    <div className={`lyrics-panel${fullscreen ? " fullscreen" : ""}${compact ? " compact" : ""}`}>
       <header className="lyrics-header">
         <div className="lyrics-track">
           {current.coverUrl ? (
@@ -88,21 +95,40 @@ export function LyricsPanel() {
           <div>
             <h2 className="lyrics-title">{current.title}</h2>
             <p className="lyrics-artist muted">
-              {[current.artist, current.album].filter(Boolean).join(" · ")}
+              {current.artistId ? (
+                <Link to={`/artist/${current.artistId}`}>{current.artist}</Link>
+              ) : (
+                current.artist
+              )}
+              {current.album ? ` · ${current.album}` : ""}
             </p>
           </div>
         </div>
-        {lyrics?.synced && (
-          <div className="lyrics-offset">
-            <button type="button" className="btn tiny secondary" onClick={() => adjustOffset(-500)}>
-              −0.5s
+        <div className="lyrics-header-actions">
+          {lyrics?.synced && (
+            <div className="lyrics-offset">
+              <button type="button" className="btn tiny secondary" onClick={() => adjustOffset(-500)}>
+                −0.5s
+              </button>
+              <span className="muted">Sync</span>
+              <button type="button" className="btn tiny secondary" onClick={() => adjustOffset(500)}>
+                +0.5s
+              </button>
+            </div>
+          )}
+          {onClose && (
+            <button type="button" className="icon-btn" onClick={onClose} aria-label="Close lyrics" title="Close">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path
+                  d="M6 6l12 12M18 6L6 18"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              </svg>
             </button>
-            <span className="muted">Sync</span>
-            <button type="button" className="btn tiny secondary" onClick={() => adjustOffset(500)}>
-              +0.5s
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </header>
 
       <div className="lyrics-body" ref={scrollRef} onScroll={onScroll}>
@@ -139,10 +165,11 @@ export function LyricsPanel() {
       {lyrics && (
         <footer className="lyrics-footer muted">
           {lyrics.synced?.length
-            ? "Synchronized lyrics · click a line to seek"
+            ? "Synchronized · click a line to seek"
             : "Lyrics"}{" "}
           · {lyrics.source === "server" ? "Navidrome" : "LRCLIB"}
           {playing ? "" : " · paused"}
+          {fullscreen ? " · press Y to close" : " · press Y again for full screen"}
         </footer>
       )}
     </div>

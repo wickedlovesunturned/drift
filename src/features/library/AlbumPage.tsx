@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useSettings } from "../settings/SettingsContext";
 import {
   coverArtUrl,
@@ -74,7 +74,11 @@ export function AlbumPage() {
           </p>
           <h1>{album.name}</h1>
           <p className="muted" style={{ margin: "0 0 1rem" }}>
-            {album.artist}
+            {album.artistId ? (
+              <Link to={`/artist/${album.artistId}`}>{album.artist}</Link>
+            ) : (
+              album.artist
+            )}
             {album.year ? ` · ${album.year}` : ""}
           </p>
           <div className="hero-actions">

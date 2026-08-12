@@ -7,6 +7,7 @@ import { TitleBar } from "./features/layout/TitleBar";
 import { ConnectPage } from "./features/auth/ConnectPage";
 import { HomePage } from "./features/library/HomePage";
 import { AlbumPage } from "./features/library/AlbumPage";
+import { ArtistPage } from "./features/library/ArtistPage";
 import { LibraryPage } from "./features/library/LibraryPage";
 import { FavoritesPage } from "./features/library/FavoritesPage";
 import { PlaylistsPage } from "./features/library/PlaylistsPage";
@@ -66,6 +67,7 @@ export default function App() {
               <Route path="library" element={<LibraryPage />} />
               <Route path="favorites" element={<FavoritesPage />} />
               <Route path="album/:id" element={<AlbumPage />} />
+              <Route path="artist/:id" element={<ArtistPage />} />
               <Route path="playlists" element={<PlaylistsPage />} />
               <Route path="playlist/:id" element={<PlaylistPage />} />
               <Route path="search" element={<SearchPage />} />

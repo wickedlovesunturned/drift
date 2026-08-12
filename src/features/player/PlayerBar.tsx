@@ -2,8 +2,8 @@ import { usePlayer } from "./PlayerContext";
 import { Cover } from "../library/Cover";
 import { useFavorites } from "../library/FavoritesContext";
 import { APP_NAME } from "../../lib/constants";
+import { NowPlayingMenu } from "./NowPlayingMenu";
 import {
-  IconMore,
   IconNext,
   IconPause,
   IconPlay,
@@ -25,7 +25,7 @@ export function PlayerBar() {
     shuffle,
     repeat,
     queuePanelOpen,
-    lyricsPanelOpen,
+    lyricsMode,
     positionMs,
     durationMs,
     volume,
@@ -38,7 +38,7 @@ export function PlayerBar() {
     toggleShuffle,
     cycleRepeat,
     toggleQueuePanel,
-    toggleLyricsPanel,
+    cycleLyricsMode,
   } = usePlayer();
   const { isFavorite, toggleFavorite } = useFavorites();
 
@@ -46,6 +46,7 @@ export function PlayerBar() {
   const progress = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
   const volumePercent = Math.round(volume * 100);
   const subtitle = [current?.artist, current?.album].filter(Boolean).join(" - ");
+  const lyricsActive = lyricsMode !== "off";
 
   return (
     <header className="player-bar am-bar">
@@ -107,9 +108,7 @@ export function PlayerBar() {
           <div className="now-module-text">
             <div className="now-title-row">
               <span className="title">{current?.title ?? APP_NAME}</span>
-              <button type="button" className="icon-btn tiny" aria-label="More" title="More">
-                <IconMore size={14} />
-              </button>
+              <NowPlayingMenu />
             </div>
             <div className="artist">{subtitle || "Nothing playing"}</div>
           </div>
@@ -161,12 +160,24 @@ export function PlayerBar() {
           <span className="volume-value">{volumePercent}</span>
         </div>
         <button
-          className={`icon-btn ghost lyrics-toggle${lyricsPanelOpen ? " active" : ""}`}
+          className={`icon-btn ghost lyrics-toggle${lyricsActive ? " active" : ""}`}
           type="button"
-          onClick={toggleLyricsPanel}
-          aria-label={lyricsPanelOpen ? "Hide lyrics" : "Show lyrics"}
-          aria-pressed={lyricsPanelOpen}
-          title="Lyrics (Y)"
+          onClick={cycleLyricsMode}
+          aria-label={
+            lyricsMode === "off"
+              ? "Show lyrics"
+              : lyricsMode === "side"
+                ? "Expand lyrics"
+                : "Hide lyrics"
+          }
+          aria-pressed={lyricsActive}
+          title={
+            lyricsMode === "off"
+              ? "Lyrics (Y)"
+              : lyricsMode === "side"
+                ? "Full-screen lyrics (Y)"
+                : "Close lyrics (Y)"
+          }
         >
           <IconLyrics size={17} />
         </button>

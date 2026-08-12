@@ -25,6 +25,7 @@ export interface PlaybackSource {
 }
 
 export type RepeatMode = "off" | "all" | "one";
+export type LyricsMode = "off" | "side" | "full";
 
 /** Volume moves in 5% notches so the readout is always a round number. */
 export const VOLUME_STEP = 0.05;
@@ -136,7 +137,7 @@ interface PlayerContextValue {
   shuffle: boolean;
   repeat: RepeatMode;
   queuePanelOpen: boolean;
-  lyricsPanelOpen: boolean;
+  lyricsMode: LyricsMode;
   positionMs: number;
   durationMs: number;
   volume: number;
@@ -152,6 +153,8 @@ interface PlayerContextValue {
     opts?: { shuffle?: boolean; source?: PlaybackSource },
   ) => Promise<void>;
   playQueueIndex: (index: number) => void;
+  removeFromQueue: (index: number) => void;
+  removeCurrentFromQueue: () => void;
   toggle: () => void;
   play: () => void;
   pause: () => void;
@@ -166,8 +169,8 @@ interface PlayerContextValue {
   cycleRepeat: () => void;
   toggleQueuePanel: () => void;
   setQueuePanelOpen: (open: boolean) => void;
-  toggleLyricsPanel: () => void;
-  setLyricsPanelOpen: (open: boolean) => void;
+  cycleLyricsMode: () => void;
+  setLyricsMode: (mode: LyricsMode) => void;
   setLastPath: (path: string) => void;
 }
 
@@ -187,7 +190,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const playingRef = useRef(false);
   const sourceRef = useRef<PlaybackSource | null>(null);
   const queuePanelOpenRef = useRef(false);
-  const lyricsPanelOpenRef = useRef(false);
+  const lyricsModeRef = useRef<LyricsMode>("off");
   const lastPathRef = useRef("");
   const sessionReadyRef = useRef(false);
   const restoreSeekRef = useRef<number | null>(null);
@@ -201,7 +204,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState<RepeatMode>("off");
   const [queuePanelOpen, setQueuePanelOpenState] = useState(false);
-  const [lyricsPanelOpen, setLyricsPanelOpenState] = useState(false);
+  const [lyricsMode, setLyricsModeState] = useState<LyricsMode>("off");
   const [positionMs, setPositionMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
   const [volume, setVolumeState] = useState(0.85);
@@ -223,7 +226,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   playingRef.current = playing;
   sourceRef.current = source;
   queuePanelOpenRef.current = queuePanelOpen;
-  lyricsPanelOpenRef.current = lyricsPanelOpen;
+  lyricsModeRef.current = lyricsMode;
   lastPathRef.current = lastPath;
   sessionReadyRef.current = sessionReady;
 
@@ -574,6 +577,37 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const removeFromQueue = useCallback((index: number) => {
+    const q = queueRef.current;
+    if (index < 0 || index >= q.length) return;
+    const nextQueue = q.filter((_, i) => i !== index);
+    const current = currentIndexRef.current;
+    let nextIndex = current;
+    if (index < current) nextIndex = current - 1;
+    else if (index === current) {
+      nextIndex = Math.min(current, nextQueue.length - 1);
+      loadedTrackIdRef.current = null;
+    }
+    setQueue(nextQueue);
+    setCurrentIndex(nextIndex);
+    if (nextQueue.length === 0) {
+      const audio = audioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.removeAttribute("src");
+      }
+      setPlaying(false);
+      setPositionMs(0);
+      setDurationMs(0);
+    }
+  }, []);
+
+  const removeCurrentFromQueue = useCallback(() => {
+    const idx = currentIndexRef.current;
+    if (idx < 0) return;
+    removeFromQueue(idx);
+  }, [removeFromQueue]);
+
   const toggle = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || !current) return;
@@ -679,9 +713,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setQueuePanelOpenState((open) => {
       const next = !open;
       queuePanelOpenRef.current = next;
-      if (next) {
-        lyricsPanelOpenRef.current = false;
-        setLyricsPanelOpenState(false);
+      if (next && lyricsModeRef.current === "side") {
+        lyricsModeRef.current = "off";
+        setLyricsModeState("off");
       }
       return next;
     });
@@ -690,31 +724,32 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const setQueuePanelOpen = useCallback((open: boolean) => {
     queuePanelOpenRef.current = open;
     setQueuePanelOpenState(open);
-    if (open) {
-      lyricsPanelOpenRef.current = false;
-      setLyricsPanelOpenState(false);
+    if (open && lyricsModeRef.current === "side") {
+      lyricsModeRef.current = "off";
+      setLyricsModeState("off");
     }
   }, []);
 
-  const toggleLyricsPanel = useCallback(() => {
-    setLyricsPanelOpenState((open) => {
-      const next = !open;
-      lyricsPanelOpenRef.current = next;
-      if (next) {
+  const setLyricsMode = useCallback((mode: LyricsMode) => {
+    lyricsModeRef.current = mode;
+    setLyricsModeState(mode);
+    if (mode === "side") {
+      queuePanelOpenRef.current = false;
+      setQueuePanelOpenState(false);
+    }
+  }, []);
+
+  /** off → side panel → fullscreen → off */
+  const cycleLyricsMode = useCallback(() => {
+    setLyricsModeState((mode) => {
+      const next: LyricsMode = mode === "off" ? "side" : mode === "side" ? "full" : "off";
+      lyricsModeRef.current = next;
+      if (next === "side") {
         queuePanelOpenRef.current = false;
         setQueuePanelOpenState(false);
       }
       return next;
     });
-  }, []);
-
-  const setLyricsPanelOpen = useCallback((open: boolean) => {
-    lyricsPanelOpenRef.current = open;
-    setLyricsPanelOpenState(open);
-    if (open) {
-      queuePanelOpenRef.current = false;
-      setQueuePanelOpenState(false);
-    }
   }, []);
 
   const cycleRepeat = useCallback(() => {
@@ -771,7 +806,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       shuffle,
       repeat,
       queuePanelOpen,
-      lyricsPanelOpen,
+      lyricsMode,
       positionMs,
       durationMs,
       volume,
@@ -782,6 +817,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       lastPath,
       playTracks,
       playQueueIndex,
+      removeFromQueue,
+      removeCurrentFromQueue,
       toggle,
       play,
       pause,
@@ -796,8 +833,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       cycleRepeat,
       toggleQueuePanel,
       setQueuePanelOpen,
-      toggleLyricsPanel,
-      setLyricsPanelOpen,
+      cycleLyricsMode,
+      setLyricsMode,
       setLastPath,
     }),
     [
@@ -809,7 +846,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       shuffle,
       repeat,
       queuePanelOpen,
-      lyricsPanelOpen,
+      lyricsMode,
       positionMs,
       durationMs,
       volume,
@@ -819,6 +856,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       lastPath,
       playTracks,
       playQueueIndex,
+      removeFromQueue,
+      removeCurrentFromQueue,
       toggle,
       play,
       pause,
@@ -833,8 +872,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       cycleRepeat,
       toggleQueuePanel,
       setQueuePanelOpen,
-      toggleLyricsPanel,
-      setLyricsPanelOpen,
+      cycleLyricsMode,
+      setLyricsMode,
       setLastPath,
     ],
   );

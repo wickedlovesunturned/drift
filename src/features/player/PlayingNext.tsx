@@ -3,7 +3,15 @@ import { Cover } from "../library/Cover";
 import { formatDuration } from "../../lib/subsonic/client";
 
 export function PlayingNext() {
-  const { upcoming, currentIndex, playQueueIndex, queue, source, toggleQueuePanel } = usePlayer();
+  const {
+    upcoming,
+    currentIndex,
+    playQueueIndex,
+    removeFromQueue,
+    queue,
+    source,
+    toggleQueuePanel,
+  } = usePlayer();
   const sourceLabel =
     source?.name ||
     (source?.kind === "playlist"
@@ -46,18 +54,29 @@ export function PlayingNext() {
             const absoluteIndex = currentIndex + 1 + i;
             return (
               <li key={`${track.id}-${absoluteIndex}`}>
-                <button
-                  type="button"
-                  className="playing-next-row"
-                  onClick={() => playQueueIndex(absoluteIndex)}
-                >
-                  <Cover src={track.coverUrl} className="next-cover" alt="" />
-                  <span className="next-meta">
-                    <span className="title">{track.title}</span>
-                    <span className="artist">{track.artist ?? "Unknown"}</span>
-                  </span>
-                  <span className="dur">{formatDuration(track.duration)}</span>
-                </button>
+                <div className="playing-next-row-wrap">
+                  <button
+                    type="button"
+                    className="playing-next-row"
+                    onClick={() => playQueueIndex(absoluteIndex)}
+                  >
+                    <Cover src={track.coverUrl} className="next-cover" alt="" />
+                    <span className="next-meta">
+                      <span className="title">{track.title}</span>
+                      <span className="artist">{track.artist ?? "Unknown"}</span>
+                    </span>
+                    <span className="dur">{formatDuration(track.duration)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn tiny next-remove"
+                    aria-label="Remove from queue"
+                    title="Remove (Delete)"
+                    onClick={() => removeFromQueue(absoluteIndex)}
+                  >
+                    ×
+                  </button>
+                </div>
               </li>
             );
           })}

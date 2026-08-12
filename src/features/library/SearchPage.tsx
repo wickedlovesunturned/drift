@@ -140,7 +140,7 @@ export function SearchPage() {
           <ul className="artist-list">
             {artists.map((artist) => (
               <li key={artist.id}>
-                <Link className="artist-row" to={`/library`}>
+                <Link className="artist-row" to={`/artist/${artist.id}`}>
                   {artist.name}
                   {artist.albumCount != null ? (
                     <span className="muted"> · {artist.albumCount} albums</span>

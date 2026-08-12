@@ -11,7 +11,7 @@ import { APP_NAME } from "../../lib/constants";
 import { ResizeHandle, clamp, usePersistedWidth } from "./ResizeHandle";
 
 export function AppShell() {
-  const { queuePanelOpen, lyricsPanelOpen, current } = usePlayer();
+  const { queuePanelOpen, lyricsMode, current, setLyricsMode } = usePlayer();
   const { toggleFavorite } = useFavorites();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -50,9 +50,11 @@ export function AppShell() {
     navigate(`/search?q=${encodeURIComponent(q)}`);
   }
 
+  const sideOpen = queuePanelOpen || lyricsMode === "side";
+
   return (
     <div
-      className={`app-shell${queuePanelOpen ? " queue-open" : " queue-closed"}${lyricsPanelOpen ? " lyrics-open" : ""}`}
+      className={`app-shell${sideOpen ? " queue-open" : " queue-closed"}${lyricsMode === "full" ? " lyrics-full" : ""}`}
       style={
         {
           "--nav-w": `${navWidth}px`,
@@ -137,14 +139,29 @@ export function AppShell() {
       <ResizeHandle onDrag={onNavDrag} ariaLabel="Resize sidebar" />
 
       <main className="main">
-        {lyricsPanelOpen ? <LyricsPanel /> : <Outlet />}
+        <Outlet />
       </main>
+
+      {lyricsMode === "side" && (
+        <>
+          <ResizeHandle onDrag={onNextDrag} ariaLabel="Resize lyrics" />
+          <aside className="playing-next lyrics-side">
+            <LyricsPanel compact onClose={() => setLyricsMode("off")} />
+          </aside>
+        </>
+      )}
 
       {queuePanelOpen && (
         <>
           <ResizeHandle onDrag={onNextDrag} ariaLabel="Resize Playing Next" />
           <PlayingNext />
         </>
+      )}
+
+      {lyricsMode === "full" && (
+        <div className="lyrics-fullscreen">
+          <LyricsPanel fullscreen onClose={() => setLyricsMode("off")} />
+        </div>
       )}
 
       <VolumeOsd />

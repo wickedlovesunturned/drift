@@ -23,7 +23,8 @@ export function useKeyboardShortcuts(onToggleFavorite?: () => void) {
     toggleShuffle,
     cycleRepeat,
     toggleQueuePanel,
-    toggleLyricsPanel,
+    cycleLyricsMode,
+    removeCurrentFromQueue,
   } = usePlayer();
 
   useEffect(() => {
@@ -92,11 +93,15 @@ export function useKeyboardShortcuts(onToggleFavorite?: () => void) {
           break;
         case "y":
         case "Y":
-          toggleLyricsPanel();
+          cycleLyricsMode();
           break;
         case "f":
         case "F":
           onToggleFavorite?.();
+          break;
+        case "Backspace":
+        case "Delete":
+          removeCurrentFromQueue();
           break;
         default:
           return;
@@ -117,7 +122,8 @@ export function useKeyboardShortcuts(onToggleFavorite?: () => void) {
     toggleShuffle,
     cycleRepeat,
     toggleQueuePanel,
-    toggleLyricsPanel,
+    cycleLyricsMode,
+    removeCurrentFromQueue,
     onToggleFavorite,
   ]);
 }

@@ -12,12 +12,7 @@ interface DiscordStatus {
 }
 
 function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
-  return (
-    <span className={`status-badge${ok ? " ok" : ""}`}>
-      <span className="status-dot" aria-hidden />
-      {label}
-    </span>
-  );
+  return <span className={`status-badge${ok ? " ok" : ""}`}>{label}</span>;
 }
 
 export function SettingsPage() {
@@ -343,5 +338,6 @@ const SHORTCUTS: [string[], string][] = [
   [["R"], "Repeat mode"],
   [["F"], "Favorite current song"],
   [["Q"], "Playing Next panel"],
-  [["Y"], "Lyrics panel"],
+  [["Y"], "Lyrics (side → full → off)"],
+  [["Delete", "Backspace"], "Remove current from queue"],
 ];
