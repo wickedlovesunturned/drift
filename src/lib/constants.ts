@@ -1,2 +1,4 @@
-export const APP_NAME = "Wicked Music";
-export const DEFAULT_SERVER_URL = "http://navidrome.tail861ba5.ts.net:4533";
+export const APP_NAME = "drift";
+
+/** Shown as input placeholder only; drift never assumes a server. */
+export const SERVER_URL_EXAMPLE = "https://music.example.com";

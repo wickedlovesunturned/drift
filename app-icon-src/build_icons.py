@@ -1,4 +1,4 @@
-"""Rebuild the Wicked Music icon set from app-icon-src/logo-source.png.
+"""Rebuild the drift icon set from app-icon-src/logo-source.png.
 
 The source art is a note glyph sitting on a dark rounded plate. The plate and the
 backdrop are cut away so the glyph ships with a transparent background and reads

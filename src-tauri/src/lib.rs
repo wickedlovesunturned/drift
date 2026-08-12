@@ -72,7 +72,7 @@ fn discord_test(app: tauri::AppHandle) -> Result<DiscordStatus, String> {
     let state = app.state::<SharedDiscord>();
     discord::connect_only(&state, &settings.discord_client_id)?;
     let payload = PresencePayload {
-        title: "Wicked Music".to_string(),
+        title: "drift".to_string(),
         artist: "Connected".to_string(),
         album: "Test".to_string(),
         position_ms: 0,

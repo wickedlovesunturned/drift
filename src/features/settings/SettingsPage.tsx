@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useSettings, type AppSettings } from "./SettingsContext";
 import { invoke } from "@tauri-apps/api/core";
-import { DEFAULT_SERVER_URL } from "../../lib/constants";
+import { APP_NAME, SERVER_URL_EXAMPLE } from "../../lib/constants";
 
 interface DiscordStatus {
   connected: boolean;
@@ -36,7 +36,7 @@ export function SettingsPage() {
     try {
       await save({
         ...form,
-        serverUrl: form.serverUrl.trim() || DEFAULT_SERVER_URL,
+        serverUrl: form.serverUrl.trim(),
       });
       setMessage("Settings saved.");
       try {
@@ -60,14 +60,14 @@ export function SettingsPage() {
       // Persist current Discord fields first so the backend uses them.
       await save({
         ...form,
-        serverUrl: form.serverUrl.trim() || DEFAULT_SERVER_URL,
+        serverUrl: form.serverUrl.trim(),
         discordShowListening: true,
       });
       const status = await invoke<DiscordStatus>("discord_test");
       setDiscord(status);
       setMessage(
         status.connected
-          ? "Discord connected. Check your Discord profile for a Wicked Music test presence."
+          ? `Discord connected. Check your Discord profile for a ${APP_NAME} test presence.`
           : "Discord test ran but is not connected.",
       );
     } catch (err) {
@@ -88,7 +88,7 @@ export function SettingsPage() {
             <input
               type="url"
               required
-              placeholder={DEFAULT_SERVER_URL}
+              placeholder={SERVER_URL_EXAMPLE}
               value={form.serverUrl}
               onChange={(e) => setForm({ ...form, serverUrl: e.target.value })}
             />

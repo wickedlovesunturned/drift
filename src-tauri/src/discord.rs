@@ -216,7 +216,7 @@ fn set_activity_with_parts(
 
     if with_buttons {
         if let Some(ref url) = parts.button_url {
-            activity = activity.buttons(vec![Button::new("Open Wicked Music", url.as_str())]);
+            activity = activity.buttons(vec![Button::new("Open drift", url.as_str())]);
         }
     }
 

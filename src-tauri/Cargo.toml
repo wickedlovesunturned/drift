@@ -1,12 +1,12 @@
 [package]
-name = "navidrome-desktop"
+name = "drift"
 version = "0.1.2"
-description = "Wicked Music — Navidrome desktop client with Discord Rich Presence"
-authors = ["you"]
+description = "drift — Navidrome desktop client with Discord Rich Presence"
+authors = ["drift contributors"]
 edition = "2021"
 
 [lib]
-name = "navidrome_desktop_lib"
+name = "drift_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

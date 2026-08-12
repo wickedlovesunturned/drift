@@ -1,6 +1,7 @@
 import { usePlayer } from "./PlayerContext";
 import { Cover } from "../library/Cover";
 import { useFavorites } from "../library/FavoritesContext";
+import { APP_NAME } from "../../lib/constants";
 import {
   IconMore,
   IconNext,
@@ -102,7 +103,7 @@ export function PlayerBar() {
           )}
           <div className="now-module-text">
             <div className="now-title-row">
-              <span className="title">{current?.title ?? "Wicked Music"}</span>
+              <span className="title">{current?.title ?? APP_NAME}</span>
               <button type="button" className="icon-btn tiny" aria-label="More" title="More">
                 <IconMore size={14} />
               </button>

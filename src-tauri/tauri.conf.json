@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Wicked Music",
+  "productName": "drift",
   "version": "0.1.2",
-  "identifier": "com.wickedmusic.app",
+  "identifier": "com.drift.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,13 +12,14 @@
   "app": {
     "windows": [
       {
-        "title": "Wicked Music",
+        "title": "drift",
         "width": 1920,
         "height": 1080,
         "minWidth": 1100,
         "minHeight": 700,
         "maximized": true,
-        "resizable": true
+        "resizable": true,
+        "decorations": false
       }
     ],
     "security": {

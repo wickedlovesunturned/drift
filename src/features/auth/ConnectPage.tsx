@@ -1,13 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useSettings, type AppSettings } from "../settings/SettingsContext";
 import { ping } from "../../lib/subsonic/client";
-import { APP_NAME, DEFAULT_SERVER_URL } from "../../lib/constants";
+import { APP_NAME, SERVER_URL_EXAMPLE } from "../../lib/constants";
 
 export function ConnectPage() {
   const { settings, save } = useSettings();
   const [form, setForm] = useState<AppSettings>({
     ...settings,
-    serverUrl: settings.serverUrl || DEFAULT_SERVER_URL,
     discordFallbackImageKey: settings.discordFallbackImageKey || "app_logo",
     lastFmApiKey: settings.lastFmApiKey || "",
   });
@@ -15,11 +14,7 @@ export function ConnectPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setForm((prev) => ({
-      ...prev,
-      ...settings,
-      serverUrl: settings.serverUrl || DEFAULT_SERVER_URL,
-    }));
+    setForm((prev) => ({ ...prev, ...settings }));
   }, [settings]);
 
   async function onSubmit(e: FormEvent) {
@@ -27,7 +22,7 @@ export function ConnectPage() {
     setBusy(true);
     setError(null);
     try {
-      const serverUrl = (form.serverUrl || DEFAULT_SERVER_URL).trim().replace(/\/+$/, "");
+      const serverUrl = form.serverUrl.trim().replace(/\/+$/, "");
       await ping({
         serverUrl,
         username: form.username.trim(),
@@ -58,7 +53,7 @@ export function ConnectPage() {
               <input
                 type="url"
                 required
-                placeholder={DEFAULT_SERVER_URL}
+                placeholder={SERVER_URL_EXAMPLE}
                 value={form.serverUrl}
                 onChange={(e) => setForm({ ...form, serverUrl: e.target.value })}
               />

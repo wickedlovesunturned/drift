@@ -9,7 +9,6 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { AuthConfig } from "../../lib/subsonic/client";
-import { DEFAULT_SERVER_URL } from "../../lib/constants";
 
 export interface AppSettings {
   serverUrl: string;
@@ -31,7 +30,7 @@ interface SettingsContextValue {
 }
 
 const defaultSettings: AppSettings = {
-  serverUrl: DEFAULT_SERVER_URL,
+  serverUrl: "",
   username: "",
   password: "",
   discordClientId: "",
@@ -52,7 +51,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setSettings({
         ...defaultSettings,
         ...loaded,
-        serverUrl: loaded.serverUrl?.trim() || DEFAULT_SERVER_URL,
+        serverUrl: loaded.serverUrl?.trim() ?? "",
       });
     } catch {
       setSettings(defaultSettings);
