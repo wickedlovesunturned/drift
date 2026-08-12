@@ -31,7 +31,7 @@ drift ships with no server baked in — you point it at your own Navidrome insta
 ## Getting started
 
 ```bash
-git clone <your-fork-url> drift
+git clone https://github.com/wickedlovesunturned/drift drift
 cd drift
 npm install
 npm run tauri dev
