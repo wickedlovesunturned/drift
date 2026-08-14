@@ -138,6 +138,30 @@ npx tauri signer generate -w ~/.tauri/drift.key
 
 Then put the `.pub` contents into `plugins.updater.pubkey` and the private key into the secret.
 
+### Building locally once updates are enabled
+
+Because `plugins.updater.pubkey` is set, `tauri build` insists on signing the update artifact and
+fails with *"A public key has been found, but no private key"* unless it can see the key. The
+repository secret only exists inside GitHub Actions, so a local build needs the key in the
+environment. In PowerShell, from the repo root:
+
+```powershell
+$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content -Raw C:\path\to\drift.key
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+npm run tauri build -- --bundles nsis
+```
+
+The variable takes either the key text or a path to the key file. The password variable must be set
+even when the key has no password, otherwise the CLI stops to prompt for one.
+
+To build an installer without touching the updater at all, turn the artifact off for that one build:
+
+```powershell
+npm run tauri build -- --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":false}}'
+```
+
+That produces a normal installer with no signing step and no update package.
+
 > Keep the private key backed up somewhere outside the repo. Losing it means existing installs can
 > never be updated again — every user would have to reinstall by hand.
 

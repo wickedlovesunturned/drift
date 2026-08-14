@@ -10,6 +10,7 @@ export function UpdateCard() {
     notes,
     progress,
     error,
+    errorBenign,
     checkForUpdate,
     downloadAndInstall,
     restart,
@@ -18,7 +19,7 @@ export function UpdateCard() {
   const busy = stage === "checking" || stage === "downloading" || stage === "installing";
 
   return (
-    <section className="settings-card">
+    <section className="settings-card update-card">
       <header className="settings-card-head">
         <div className="settings-card-title-row">
           <h2>Updates</h2>
@@ -51,9 +52,11 @@ export function UpdateCard() {
       {stage === "ready" && (
         <p className="success-msg">Update installed. Restart {APP_NAME} to finish.</p>
       )}
-      {stage === "error" && error && <p className="error">{error}</p>}
+      {stage === "error" && error && (
+        <p className={errorBenign ? "muted update-note-line" : "error"}>{error}</p>
+      )}
 
-      <div className="settings-save-bar">
+      <div className="update-actions">
         {stage === "ready" ? (
           <button className="btn" type="button" onClick={() => void restart()}>
             Restart now
@@ -75,7 +78,7 @@ export function UpdateCard() {
           </button>
         ) : (
           <button
-            className="btn"
+            className="btn secondary"
             type="button"
             disabled={busy}
             onClick={() => void checkForUpdate()}
