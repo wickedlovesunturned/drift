@@ -2646,6 +2646,11 @@ kbd {
   margin-bottom: 0;
 }
 
+.update-note-line {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
 .update-actions {
   display: flex;
   align-items: center;

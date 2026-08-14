@@ -33,6 +33,8 @@ interface UpdaterValue {
   /** 0-100 while downloading, null when the server sends no content length. */
   progress: number | null;
   error: string | null;
+  /** True when `error` is an expected situation rather than a fault, so the UI can stay calm about it. */
+  errorBenign: boolean;
   /** True once the automatic startup check has settled. */
   dismissed: boolean;
   dismiss: () => void;
@@ -46,10 +48,43 @@ const UpdaterContext = createContext<UpdaterValue | null>(null);
 /** The updater plugin only exists inside the Tauri shell, never in `vite dev` in a browser. */
 const IN_TAURI = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
-function messageOf(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (typeof err === "string") return err;
-  return "Update failed.";
+/**
+ * Turns updater errors into something a listener would understand. The plugin
+ * reports transport-level detail ("Could not fetch a valid release JSON from the
+ * remote") which is accurate but means nothing to someone who just wanted to
+ * know whether there is a new version.
+ */
+function messageOf(err: unknown): { message: string; benign: boolean } {
+  const raw =
+    err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  const lower = raw.toLowerCase();
+
+  // No latest.json behind the endpoint. Normal before the first release that
+  // ships an update feed, so it is stated plainly rather than in red.
+  if (lower.includes("release json") || lower.includes("404")) {
+    return {
+      message: "No update has been published yet — you're on the newest release available.",
+      benign: true,
+    };
+  }
+  if (
+    lower.includes("error sending request") ||
+    lower.includes("network") ||
+    lower.includes("dns") ||
+    lower.includes("timed out")
+  ) {
+    return {
+      message: "Couldn't reach the update server. Check your connection and try again.",
+      benign: true,
+    };
+  }
+  if (lower.includes("signature")) {
+    return {
+      message: "The update failed its signature check, so it was not installed.",
+      benign: false,
+    };
+  }
+  return { message: raw || "Update failed.", benign: false };
 }
 
 export function UpdaterProvider({ children }: { children: ReactNode }) {
@@ -59,7 +94,15 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
   const [notes, setNotes] = useState<string | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorBenign, setErrorBenign] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+
+  const fail = useCallback((err: unknown) => {
+    const { message, benign } = messageOf(err);
+    setError(message);
+    setErrorBenign(benign);
+    setStage("error");
+  }, []);
 
   // Held between check and install so we do not hit the endpoint twice.
   const pending = useRef<Update | null>(null);
@@ -95,13 +138,12 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
       if (opts?.silent) {
         setStage("idle");
       } else {
-        setError(messageOf(err));
-        setStage("error");
+        fail(err);
       }
     } finally {
       busy.current = false;
     }
-  }, []);
+  }, [fail]);
 
   const downloadAndInstall = useCallback(async () => {
     const update = pending.current;
@@ -135,21 +177,19 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
       });
       setStage("ready");
     } catch (err) {
-      setError(messageOf(err));
-      setStage("error");
+      fail(err);
     } finally {
       busy.current = false;
     }
-  }, []);
+  }, [fail]);
 
   const restart = useCallback(async () => {
     try {
       await relaunch();
     } catch (err) {
-      setError(messageOf(err));
-      setStage("error");
+      fail(err);
     }
-  }, []);
+  }, [fail]);
 
   const dismiss = useCallback(() => setDismissed(true), []);
 
@@ -171,6 +211,7 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
       notes,
       progress,
       error,
+      errorBenign,
       dismissed,
       dismiss,
       checkForUpdate,
@@ -184,6 +225,7 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
       notes,
       progress,
       error,
+      errorBenign,
       dismissed,
       dismiss,
       checkForUpdate,

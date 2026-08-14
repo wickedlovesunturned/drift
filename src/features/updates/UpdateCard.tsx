@@ -10,6 +10,7 @@ export function UpdateCard() {
     notes,
     progress,
     error,
+    errorBenign,
     checkForUpdate,
     downloadAndInstall,
     restart,
@@ -51,7 +52,9 @@ export function UpdateCard() {
       {stage === "ready" && (
         <p className="success-msg">Update installed. Restart {APP_NAME} to finish.</p>
       )}
-      {stage === "error" && error && <p className="error">{error}</p>}
+      {stage === "error" && error && (
+        <p className={errorBenign ? "muted update-note-line" : "error"}>{error}</p>
+      )}
 
       <div className="update-actions">
         {stage === "ready" ? (
