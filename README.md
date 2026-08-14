@@ -65,13 +65,14 @@ What the installer does beyond the Tauri defaults:
 | Area | Behaviour |
 |------|-----------|
 | Branding | drift sidebar and header artwork, drift icon on setup and uninstaller |
-| Install scope | Asks whether to install for the current user or all users (`installMode: both`) |
+| Install scope | Per-user, no UAC prompt (`installMode: currentUser`) so in-app updates are silent |
 | License | MIT license page, sourced from `LICENSE` |
 | WebView2 | Silently installs the runtime via the Microsoft bootstrapper if it is missing |
 | Upgrades | Backs up `settings.json` and `session.json` to `.bak` before overwriting anything |
 | Downgrades | Blocked, so a stale installer cannot clobber a newer install |
 | Uninstall | Asks whether to also delete `%APPDATA%\drift`; your keyring password is never touched |
 | Silent install | `drift_<version>_x64-setup.exe /S` — never prompts, and always keeps user data |
+| Updates | Doubles as the update package — see [Updating](#updating) |
 
 The pieces live in `src-tauri/installer/`:
 
@@ -94,6 +95,51 @@ tag produces a draft release with the installer and its SHA-256 checksum attache
 uploads the same files as a workflow artifact. Add the `WINDOWS_CERTIFICATE` (base64 `.pfx`) and
 `WINDOWS_CERTIFICATE_PASSWORD` repository secrets to get an Authenticode-signed installer —
 without them the build still succeeds, but SmartScreen will warn on first run.
+
+## Updating
+
+drift updates itself. There is no need to download a new installer once it is installed.
+
+On launch drift quietly asks GitHub whether a newer release exists. If one does, a prompt appears
+above the player bar; **Update** downloads the new installer, verifies its signature, and runs it
+in passive mode, then **Restart** relaunches into the new version. Settings, the saved server and
+the playback queue all survive, and the installer takes a `.bak` of them first regardless.
+
+The same controls live under **Settings -> Updates**, along with a manual **Check for updates**
+button and the running version. A failed background check is silent — an offline machine should not
+be nagged on every launch.
+
+Updates are only offered from **published** releases, so a draft release is safe to inspect first.
+
+### Cutting a release
+
+1. Bump `version` in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
+2. Tag and push: `git tag v0.1.4 && git push origin v0.1.4`.
+3. The workflow builds the installer and attaches it, its `.sig`, a `.sha256`, and `latest.json`
+   to a **draft** release.
+4. Review, then publish the release. Existing installs pick it up on their next launch.
+
+### Update signing keys
+
+The updater will only install a package signed with the private key matching `plugins.updater.pubkey`
+in `src-tauri/tauri.conf.json`. CI reads the private key from these repository secrets:
+
+| Secret | Value |
+|---|---|
+| `TAURI_SIGNING_PRIVATE_KEY` | Contents of the minisign private key file |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Its password, or empty if the key has none |
+
+Without them the build still produces an installer, but no `latest.json`, so nothing is offered to
+existing installs. To rotate or regenerate the pair:
+
+```bash
+npx tauri signer generate -w ~/.tauri/drift.key
+```
+
+Then put the `.pub` contents into `plugins.updater.pubkey` and the private key into the secret.
+
+> Keep the private key backed up somewhere outside the repo. Losing it means existing installs can
+> never be updated again — every user would have to reinstall by hand.
 
 ## Where your data lives
 
@@ -177,6 +223,7 @@ src/                    React UI
   features/lastfm/      Last.fm scrobbling hook
   features/lyrics/      Lyrics panel (sync + plain)
   features/settings/    Settings screen and persistence
+  features/updates/     In-app updater (background check, prompt, install)
   lib/subsonic/         Subsonic API client
 src-tauri/              Tauri/Rust backend (settings, keyring, session, Discord IPC)
   installer/            Windows NSIS installer artwork and hooks

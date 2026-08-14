@@ -27,6 +27,7 @@ jobs:
       # The `secrets` context is not available in step `if:` conditions, so
       # surface presence of the certificate through the env context instead.
       HAS_SIGNING_CERT: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
+      HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +47,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Warn if the updater signing key is missing
+        if: env.HAS_UPDATER_KEY != 'true'
+        shell: pwsh
+        run: Write-Host '::warning::TAURI_SIGNING_PRIVATE_KEY is not set. The installer will build, but no signed updater artifact or latest.json will be produced, so existing installs will not see this release.'
 
       - name: Verify installer assets
         shell: pwsh
@@ -113,6 +119,10 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the updater artifact. Without this the build still produces an
+          # installer, but no latest.json, so existing installs cannot update.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: ${{ steps.cfg.outputs.args }}
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
@@ -122,7 +132,13 @@ jobs:
             Verify the download against the published `.sha256` file before installing.
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: false
+          # Generates latest.json next to the installer. The app polls
+          # releases/latest/download/latest.json, so updates only reach users
+          # once you publish the draft release.
+          uploadUpdaterJson: true
+          # Windows builds both an .msi and a setup.exe; point the updater at
+          # the NSIS one, which is the branded installer.
+          updaterJsonPreferNsis: true
 
       - name: Checksum
         shell: pwsh
