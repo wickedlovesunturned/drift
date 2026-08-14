@@ -16,6 +16,7 @@ import { SearchPage } from "./features/library/SearchPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { useDiscordPresence } from "./features/discord/useDiscordPresence";
 import { useLastFmScrobble } from "./features/lastfm/useLastFmScrobble";
+import { UpdateToast } from "./features/updates/UpdateToast";
 import { APP_NAME } from "./lib/constants";
 
 function SessionRouteSync() {
@@ -75,6 +76,7 @@ export default function App() {
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          <UpdateToast />
         </>
       )}
     </div>

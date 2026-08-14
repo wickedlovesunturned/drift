@@ -50,6 +50,121 @@ Installers and binaries land in `src-tauri/target/release/bundle/`.
 On first launch drift asks for your server URL (for example `https://music.example.com`),
 username, and password.
 
+## Windows installer
+
+The primary Windows artifact is a branded NSIS installer (`drift_<version>_x64-setup.exe`). A plain
+MSI is still produced by `npm run tauri build`, but the branding and install hooks below apply only
+to the NSIS installer. Build just that target with:
+
+```bash
+npm run tauri build -- --bundles nsis
+```
+
+What the installer does beyond the Tauri defaults:
+
+| Area | Behaviour |
+|------|-----------|
+| Branding | drift sidebar and header artwork, drift icon on setup and uninstaller |
+| Install scope | Per-user, no UAC prompt (`installMode: currentUser`) so in-app updates are silent |
+| License | MIT license page, sourced from `LICENSE` |
+| WebView2 | Silently installs the runtime via the Microsoft bootstrapper if it is missing |
+| Upgrades | Backs up `settings.json` and `session.json` to `.bak` before overwriting anything |
+| Downgrades | Blocked, so a stale installer cannot clobber a newer install |
+| Uninstall | Asks whether to also delete `%APPDATA%\drift`; your keyring password is never touched |
+| Silent install | `drift_<version>_x64-setup.exe /S` — never prompts, and always keeps user data |
+| Updates | Doubles as the update package — see [Updating](#updating) |
+
+The pieces live in `src-tauri/installer/`:
+
+```
+header.bmp      150x57  header strip on the inner pages
+sidebar.bmp     164x314 welcome / finish sidebar
+installer.ico           setup and uninstaller icon
+hooks.nsh               NSIS macros for the backup and uninstall-cleanup behaviour
+```
+
+The two bitmaps and the icon are generated from `app-icon-src/icon-1024.png` and the CSS brand
+tokens, so re-run this after any icon or palette change instead of editing them by hand:
+
+```bash
+python app-icon-src/build_installer_assets.py
+```
+
+`.github/workflows/windows-installer.yml` builds the installer on `windows-latest`. Pushing a `v*`
+tag produces a draft release with the installer and its SHA-256 checksum attached; a manual run
+uploads the same files as a workflow artifact. Add the `WINDOWS_CERTIFICATE` (base64 `.pfx`) and
+`WINDOWS_CERTIFICATE_PASSWORD` repository secrets to get an Authenticode-signed installer —
+without them the build still succeeds, but SmartScreen will warn on first run.
+
+## Updating
+
+drift updates itself. There is no need to download a new installer once it is installed.
+
+On launch drift quietly asks GitHub whether a newer release exists. If one does, a prompt appears
+above the player bar; **Update** downloads the new installer, verifies its signature, and runs it
+in passive mode, then **Restart** relaunches into the new version. Settings, the saved server and
+the playback queue all survive, and the installer takes a `.bak` of them first regardless.
+
+The same controls live under **Settings -> Updates**, along with a manual **Check for updates**
+button and the running version. A failed background check is silent — an offline machine should not
+be nagged on every launch.
+
+Updates are only offered from **published** releases, so a draft release is safe to inspect first.
+
+### Cutting a release
+
+1. Bump `version` in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
+2. Tag and push: `git tag v0.1.4 && git push origin v0.1.4`.
+3. The workflow builds the installer and attaches it, its `.sig`, a `.sha256`, and `latest.json`
+   to a **draft** release.
+4. Review, then publish the release. Existing installs pick it up on their next launch.
+
+### Update signing keys
+
+The updater will only install a package signed with the private key matching `plugins.updater.pubkey`
+in `src-tauri/tauri.conf.json`. CI reads the private key from these repository secrets:
+
+| Secret | Value |
+|---|---|
+| `TAURI_SIGNING_PRIVATE_KEY` | Contents of the minisign private key file |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Its password, or empty if the key has none |
+
+Without them the build still produces an installer, but no `latest.json`, so nothing is offered to
+existing installs. To rotate or regenerate the pair:
+
+```bash
+npx tauri signer generate -w ~/.tauri/drift.key
+```
+
+Then put the `.pub` contents into `plugins.updater.pubkey` and the private key into the secret.
+
+### Building locally once updates are enabled
+
+Because `plugins.updater.pubkey` is set, `tauri build` insists on signing the update artifact and
+fails with *"A public key has been found, but no private key"* unless it can see the key. The
+repository secret only exists inside GitHub Actions, so a local build needs the key in the
+environment. In PowerShell, from the repo root:
+
+```powershell
+$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content -Raw C:\path\to\drift.key
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+npm run tauri build -- --bundles nsis
+```
+
+The variable takes either the key text or a path to the key file. The password variable must be set
+even when the key has no password, otherwise the CLI stops to prompt for one.
+
+To build an installer without touching the updater at all, turn the artifact off for that one build:
+
+```powershell
+npm run tauri build -- --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":false}}'
+```
+
+That produces a normal installer with no signing step and no update package.
+
+> Keep the private key backed up somewhere outside the repo. Losing it means existing installs can
+> never be updated again — every user would have to reinstall by hand.
+
 ## Where your data lives
 
 | What | Where |
@@ -132,9 +247,11 @@ src/                    React UI
   features/lastfm/      Last.fm scrobbling hook
   features/lyrics/      Lyrics panel (sync + plain)
   features/settings/    Settings screen and persistence
+  features/updates/     In-app updater (background check, prompt, install)
   lib/subsonic/         Subsonic API client
 src-tauri/              Tauri/Rust backend (settings, keyring, session, Discord IPC)
-app-icon-src/           Icon source art and the script that regenerates the icon set
+  installer/            Windows NSIS installer artwork and hooks
+app-icon-src/           Icon source art and the scripts that regenerate icons + installer assets
 ```
 
 ## Contributing

@@ -60,6 +60,9 @@ export function PlaylistPage() {
   const [pendingCoverUrl, setPendingCoverUrl] = useState<string | null>(null);
   const [removeCover, setRemoveCover] = useState(false);
   const [dragFromIndex, setDragFromIndex] = useState<number | null>(null);
+  // Drag events fire faster than React commits state, so the authoritative
+  // source index lives in a ref and the state copy only drives styling.
+  const dragFrom = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [suppressPlayClick, setSuppressPlayClick] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -289,30 +292,44 @@ export function PlaylistPage() {
   }
 
   function onSongDragStart(index: number, e: DragEvent<HTMLLIElement>) {
-    if (savingOrder) return;
+    if (savingOrder) {
+      e.preventDefault();
+      return;
+    }
+    dragFrom.current = index;
     setDragFromIndex(index);
     setSuppressPlayClick(true);
     e.dataTransfer.effectAllowed = "move";
+    // A drag carrying no payload is treated as invalid and shows the "no drop"
+    // cursor, so the row index goes along for the ride even though the reorder
+    // reads it from the ref.
+    e.dataTransfer.setData("text/plain", String(index));
   }
 
   function onSongDragOver(index: number, e: DragEvent<HTMLLIElement>) {
-    if (dragFromIndex == null || dragFromIndex === index) return;
+    if (dragFrom.current == null) return;
+    // preventDefault has to run on every dragover, including over the row being
+    // dragged: skipping it marks that row as an invalid target and the cursor
+    // stays a "no drop" sign for the whole gesture.
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    setDragOverIndex(index);
+    if (index !== dragFrom.current) setDragOverIndex(index);
+    else setDragOverIndex(null);
   }
 
   function onSongDrop(index: number, e: DragEvent<HTMLLIElement>) {
     e.preventDefault();
-    if (dragFromIndex == null) return;
-    const from = dragFromIndex;
+    const from = dragFrom.current;
+    dragFrom.current = null;
     setDragFromIndex(null);
     setDragOverIndex(null);
-    void reorderSongs(from, index);
     window.setTimeout(() => setSuppressPlayClick(false), 0);
+    if (from == null || from === index) return;
+    void reorderSongs(from, index);
   }
 
   function onSongDragEnd() {
+    dragFrom.current = null;
     setDragFromIndex(null);
     setDragOverIndex(null);
     window.setTimeout(() => setSuppressPlayClick(false), 0);
@@ -530,6 +547,7 @@ export function PlaylistPage() {
             className={`track-row${dragOverIndex === i ? " is-drop-target" : ""}${dragFromIndex === i ? " is-dragging" : ""}`}
             draggable={!savingOrder}
             onDragStart={(e) => onSongDragStart(i, e)}
+            onDragEnter={(e) => onSongDragOver(i, e)}
             onDragOver={(e) => onSongDragOver(i, e)}
             onDrop={(e) => onSongDrop(i, e)}
             onDragEnd={onSongDragEnd}
