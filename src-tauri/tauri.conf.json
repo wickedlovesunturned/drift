@@ -19,7 +19,8 @@
         "minHeight": 700,
         "maximized": true,
         "resizable": true,
-        "decorations": false
+        "decorations": false,
+        "dragDropEnabled": false
       }
     ],
     "security": {
@@ -43,7 +44,7 @@
     "createUpdaterArtifacts": true,
     "publisher": "wickedlovesunturned",
     "homepage": "https://github.com/wickedlovesunturned/drift",
-    "copyright": "Copyright © 2026 drift contributors",
+    "copyright": "Copyright \u00a9 2026 drift contributors",
     "category": "Music",
     "shortDescription": "Navidrome desktop client",
     "longDescription": "drift is an open-source desktop client for Navidrome and other Subsonic-compatible servers, with Last.fm scrobbling, synchronized lyrics, and Discord Rich Presence.",
@@ -64,7 +65,9 @@
       },
       "nsis": {
         "installMode": "currentUser",
-        "languages": ["English"],
+        "languages": [
+          "English"
+        ],
         "displayLanguageSelector": false,
         "compression": "lzma",
         "installerIcon": "installer/installer.ico",
