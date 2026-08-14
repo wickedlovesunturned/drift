@@ -26,15 +26,54 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/wickedlovesunturned/drift/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgxN0ZGQ0IxN0Y5MDcwQjQKUldTMGNKQi9zZngvZ1VSMFFEdkU4WDRRNWdEaVpQQlgzamtEeGNCaG01blpYRnAxd0ZJNks3anMK",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
+    "publisher": "wickedlovesunturned",
+    "homepage": "https://github.com/wickedlovesunturned/drift",
+    "copyright": "Copyright © 2026 drift contributors",
+    "category": "Music",
+    "shortDescription": "Navidrome desktop client",
+    "longDescription": "drift is an open-source desktop client for Navidrome and other Subsonic-compatible servers, with Last.fm scrobbling, synchronized lyrics, and Discord Rich Presence.",
+    "license": "MIT",
+    "licenseFile": "../LICENSE",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "allowDowngrades": false,
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English"],
+        "displayLanguageSelector": false,
+        "compression": "lzma",
+        "installerIcon": "installer/installer.ico",
+        "uninstallerIcon": "installer/installer.ico",
+        "headerImage": "installer/header.bmp",
+        "uninstallerHeaderImage": "installer/header.bmp",
+        "sidebarImage": "installer/sidebar.bmp",
+        "installerHooks": "installer/hooks.nsh"
+      }
+    }
   }
 }

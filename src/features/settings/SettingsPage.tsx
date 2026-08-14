@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { APP_NAME, SERVER_URL_EXAMPLE } from "../../lib/constants";
 import { getLastFmSession } from "../../lib/lastfm";
 import { ToggleSwitch } from "./ToggleSwitch";
+import { UpdateCard } from "../updates/UpdateCard";
 
 interface DiscordStatus {
   connected: boolean;
@@ -306,6 +307,8 @@ export function SettingsPage() {
           </button>
         </div>
       </form>
+
+      <UpdateCard />
 
       <section className="settings-card shortcuts">
         <h2 className="panel-title">Keyboard shortcuts</h2>

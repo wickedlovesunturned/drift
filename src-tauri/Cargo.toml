@@ -21,3 +21,8 @@ discord-rich-presence = "1.1.0"
 keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
 dirs = "6"
 url = "2"
+
+# In-app updater. Desktop only — there is no bundle to swap out on mobile.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"

@@ -1,0 +1,158 @@
+name: Windows installer
+
+# Builds the branded NSIS installer described in src-tauri/installer/.
+#
+#   push a v* tag   -> builds and attaches drift_<version>_x64-setup.exe to a draft release
+#   manual dispatch -> builds and uploads the installer as a workflow artifact
+#
+# Optional Authenticode signing: add the WINDOWS_CERTIFICATE (base64-encoded .pfx)
+# and WINDOWS_CERTIFICATE_PASSWORD repository secrets. Without them the installer
+# is still produced, just unsigned, and SmartScreen will warn on first run.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  BUNDLE_DIR: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      # The `secrets` context is not available in step `if:` conditions, so
+      # surface presence of the certificate through the env context instead.
+      HAS_SIGNING_CERT: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
+      HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Warn if the updater signing key is missing
+        if: env.HAS_UPDATER_KEY != 'true'
+        shell: pwsh
+        run: Write-Host '::warning::TAURI_SIGNING_PRIVATE_KEY is not set. The installer will build, but no signed updater artifact or latest.json will be produced, so existing installs will not see this release.'
+
+      - name: Verify installer assets
+        shell: pwsh
+        run: |
+          $required = @(
+            'src-tauri/installer/header.bmp',
+            'src-tauri/installer/sidebar.bmp',
+            'src-tauri/installer/installer.ico',
+            'src-tauri/installer/hooks.nsh'
+          )
+          $missing = $required | Where-Object { -not (Test-Path $_) }
+          if ($missing) {
+            Write-Error "Missing installer assets: $($missing -join ', '). Run: python app-icon-src/build_installer_assets.py"
+            exit 1
+          }
+          # NSIS/MUI2 is strict about these bitmaps, so fail early rather than
+          # halfway through a 15 minute Rust build.
+          Add-Type -AssemblyName System.Drawing
+          $expected = @{ 'src-tauri/installer/header.bmp' = @(150, 57); 'src-tauri/installer/sidebar.bmp' = @(164, 314) }
+          foreach ($path in $expected.Keys) {
+            $img = [System.Drawing.Image]::FromFile((Resolve-Path $path))
+            $w = $img.Width; $h = $img.Height
+            $img.Dispose()
+            if ($w -ne $expected[$path][0] -or $h -ne $expected[$path][1]) {
+              Write-Error "$path is ${w}x${h}, expected $($expected[$path][0])x$($expected[$path][1])"
+              exit 1
+            }
+          }
+
+      # Signing has to happen during bundling, not after, otherwise the release
+      # upload would carry the unsigned binaries.
+      - name: Import signing certificate
+        id: cert
+        if: env.HAS_SIGNING_CERT == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'drift-signing.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $imported = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          Remove-Item $pfx -Force
+          "thumbprint=$($imported.Thumbprint)" >> $env:GITHUB_OUTPUT
+
+      - name: Resolve build config
+        id: cfg
+        shell: pwsh
+        run: |
+          $thumb = '${{ steps.cert.outputs.thumbprint }}'
+          if ($thumb) {
+            $override = @{ bundle = @{ windows = @{
+              certificateThumbprint = $thumb
+              digestAlgorithm       = 'sha256'
+              timestampUrl          = 'http://timestamp.digicert.com'
+            } } } | ConvertTo-Json -Depth 6 -Compress
+            "args=--target x86_64-pc-windows-msvc --bundles nsis --config $override" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host '::notice::No signing certificate configured — producing an unsigned installer.'
+            "args=--target x86_64-pc-windows-msvc --bundles nsis" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Build installer
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the updater artifact. Without this the build still produces an
+          # installer, but no latest.json, so existing installs cannot update.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          args: ${{ steps.cfg.outputs.args }}
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          releaseName: drift ${{ github.ref_name }}
+          releaseBody: |
+            Windows installer built from `${{ github.sha }}`.
+            Verify the download against the published `.sha256` file before installing.
+          releaseDraft: true
+          prerelease: false
+          # Generates latest.json next to the installer. The app polls
+          # releases/latest/download/latest.json, so updates only reach users
+          # once you publish the draft release.
+          uploadUpdaterJson: true
+          # Windows builds both an .msi and a setup.exe; point the updater at
+          # the NSIS one, which is the branded installer.
+          updaterJsonPreferNsis: true
+
+      - name: Checksum
+        shell: pwsh
+        run: |
+          Get-ChildItem "$env:BUNDLE_DIR/*.exe" | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)" | Out-File "$($_.FullName).sha256" -Encoding ascii
+            Write-Host "$hash  $($_.Name)"
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: drift-windows-installer
+          path: |
+            ${{ env.BUNDLE_DIR }}/*.exe
+            ${{ env.BUNDLE_DIR }}/*.sha256
+          if-no-files-found: error
