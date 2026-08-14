@@ -50,6 +50,51 @@ Installers and binaries land in `src-tauri/target/release/bundle/`.
 On first launch drift asks for your server URL (for example `https://music.example.com`),
 username, and password.
 
+## Windows installer
+
+The primary Windows artifact is a branded NSIS installer (`drift_<version>_x64-setup.exe`). A plain
+MSI is still produced by `npm run tauri build`, but the branding and install hooks below apply only
+to the NSIS installer. Build just that target with:
+
+```bash
+npm run tauri build -- --bundles nsis
+```
+
+What the installer does beyond the Tauri defaults:
+
+| Area | Behaviour |
+|------|-----------|
+| Branding | drift sidebar and header artwork, drift icon on setup and uninstaller |
+| Install scope | Asks whether to install for the current user or all users (`installMode: both`) |
+| License | MIT license page, sourced from `LICENSE` |
+| WebView2 | Silently installs the runtime via the Microsoft bootstrapper if it is missing |
+| Upgrades | Backs up `settings.json` and `session.json` to `.bak` before overwriting anything |
+| Downgrades | Blocked, so a stale installer cannot clobber a newer install |
+| Uninstall | Asks whether to also delete `%APPDATA%\drift`; your keyring password is never touched |
+| Silent install | `drift_<version>_x64-setup.exe /S` — never prompts, and always keeps user data |
+
+The pieces live in `src-tauri/installer/`:
+
+```
+header.bmp      150x57  header strip on the inner pages
+sidebar.bmp     164x314 welcome / finish sidebar
+installer.ico           setup and uninstaller icon
+hooks.nsh               NSIS macros for the backup and uninstall-cleanup behaviour
+```
+
+The two bitmaps and the icon are generated from `app-icon-src/icon-1024.png` and the CSS brand
+tokens, so re-run this after any icon or palette change instead of editing them by hand:
+
+```bash
+python app-icon-src/build_installer_assets.py
+```
+
+`.github/workflows/windows-installer.yml` builds the installer on `windows-latest`. Pushing a `v*`
+tag produces a draft release with the installer and its SHA-256 checksum attached; a manual run
+uploads the same files as a workflow artifact. Add the `WINDOWS_CERTIFICATE` (base64 `.pfx`) and
+`WINDOWS_CERTIFICATE_PASSWORD` repository secrets to get an Authenticode-signed installer —
+without them the build still succeeds, but SmartScreen will warn on first run.
+
 ## Where your data lives
 
 | What | Where |
@@ -134,7 +179,8 @@ src/                    React UI
   features/settings/    Settings screen and persistence
   lib/subsonic/         Subsonic API client
 src-tauri/              Tauri/Rust backend (settings, keyring, session, Discord IPC)
-app-icon-src/           Icon source art and the script that regenerates the icon set
+  installer/            Windows NSIS installer artwork and hooks
+app-icon-src/           Icon source art and the scripts that regenerate icons + installer assets
 ```
 
 ## Contributing
