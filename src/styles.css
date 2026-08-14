@@ -2630,11 +2630,32 @@ kbd {
   color: var(--text);
 }
 
+/* The card lays its own children out, so every optional block (progress row,
+   status message, actions) is evenly spaced without per-block margins. */
+.update-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.settings-page > .update-card {
+  margin-top: 1rem;
+}
+
+.update-card .settings-card-head {
+  margin-bottom: 0;
+}
+
+.update-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 .update-row {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  padding: 0.85rem 0 0.2rem;
 }
 
 .update-row-title {
@@ -2646,6 +2667,10 @@ kbd {
   margin: 0;
   font-size: 0.85rem;
   white-space: pre-line;
+}
+
+.update-row .update-progress {
+  margin-top: 0.2rem;
 }
 
 .update-progress {
