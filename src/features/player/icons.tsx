@@ -39,6 +39,14 @@ export function IconShuffle({ size }: IconProps) {
   );
 }
 
+export function IconClock({ size = 16 }: IconProps) {
+  return <Svg size={size}><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></Svg>;
+}
+
+export function IconDevice({ size = 16 }: IconProps) {
+  return <Svg size={size}><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M8 18h8" /></Svg>;
+}
+
 export function IconPrev({ size }: IconProps) {
   return (
     <Svg size={size}>

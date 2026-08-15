@@ -52,6 +52,11 @@ export interface Artist {
   artistImageUrl?: string;
 }
 
+export interface SubsonicUser {
+  username?: string;
+  jukeboxRole?: boolean;
+}
+
 function randomSalt(len = 12): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   let out = "";
@@ -331,6 +336,42 @@ export async function getArtistInfo2(auth: AuthConfig, id: string): Promise<Arti
   }
 }
 
+export async function getRandomSongs(auth: AuthConfig, size = 20): Promise<Song[]> {
+  const root = await request<{ randomSongs?: { song?: Song[] } }>(auth, "getRandomSongs", {
+    size,
+  });
+  return root.randomSongs?.song ?? [];
+}
+
+export async function getSimilarSongs(auth: AuthConfig, id: string, count = 20): Promise<Song[]> {
+  const root = await request<{ similarSongs?: { song?: Song[] } }>(auth, "getSimilarSongs", {
+    id,
+    count,
+  });
+  return root.similarSongs?.song ?? [];
+}
+
+export async function getUser(auth: AuthConfig): Promise<SubsonicUser> {
+  const root = await request<{ user?: SubsonicUser }>(auth, "getUser", { username: auth.username });
+  return root.user ?? {};
+}
+
+export type JukeboxAction = "get" | "status" | "set" | "start" | "stop" | "skip" | "add" | "clear" | "remove" | "shuffle" | "setGain";
+
+export async function jukeboxControl(
+  auth: AuthConfig,
+  action: JukeboxAction,
+  options: { ids?: string[]; index?: number; offset?: number; gain?: number } = {},
+): Promise<void> {
+  await request(auth, "jukeboxControl", {
+    action,
+    id: options.ids,
+    index: options.index,
+    offset: options.offset,
+    gain: options.gain,
+  });
+}
+
 export async function getPlaylists(auth: AuthConfig): Promise<Playlist[]> {
   const root = await request<{ playlists?: { playlist?: Playlist[] } }>(auth, "getPlaylists");
   return root.playlists?.playlist ?? [];
@@ -474,6 +515,32 @@ export async function getLyrics(
     { artist, title },
   );
   return root.lyrics ?? null;
+}
+
+export interface StructuredLyrics {
+  synced?: boolean;
+  offset?: number;
+  line?: { start?: number; value?: string }[];
+  cueLine?: {
+    index?: number;
+    start?: number;
+    end?: number;
+    value?: string;
+    cue?: { start?: number; end?: number; value?: string }[];
+  }[];
+}
+
+export async function getLyricsBySongId(
+  auth: AuthConfig,
+  id: string,
+  enhanced = false,
+): Promise<StructuredLyrics | null> {
+  const root = await request<{ lyricsList?: { structuredLyrics?: StructuredLyrics[] } }>(
+    auth,
+    "getLyricsBySongId",
+    { id, ...(enhanced ? { enhanced: true } : {}) },
+  );
+  return root.lyricsList?.structuredLyrics?.find((entry) => entry.synced && entry.line?.length) ?? null;
 }
 
 export async function coverArtUrl(

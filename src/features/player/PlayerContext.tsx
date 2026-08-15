@@ -10,7 +10,7 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { Song } from "../../lib/subsonic/client";
-import { coverArtUrl, streamUrl } from "../../lib/subsonic/client";
+import { coverArtUrl, getRandomSongs, getSimilarSongs, streamUrl } from "../../lib/subsonic/client";
 import { useSettings } from "../settings/SettingsContext";
 import { useMediaSession } from "./useMediaSession";
 
@@ -26,6 +26,7 @@ export interface PlaybackSource {
 
 export type RepeatMode = "off" | "all" | "one";
 export type LyricsMode = "off" | "side" | "full";
+export type AutoDjMode = "similar" | "random";
 
 /** Volume moves in 5% notches so the readout is always a round number. */
 export const VOLUME_STEP = 0.05;
@@ -172,6 +173,16 @@ interface PlayerContextValue {
   cycleLyricsMode: () => void;
   setLyricsMode: (mode: LyricsMode) => void;
   setLastPath: (path: string) => void;
+  sleepTimerEndsAt: number | null;
+  setSleepTimer: (minutes: number | null) => void;
+  autoDjEnabled: boolean;
+  autoDjMode: AutoDjMode;
+  autoDjCount: number;
+  autoDjTrigger: number;
+  setAutoDjEnabled: (enabled: boolean) => void;
+  setAutoDjMode: (mode: AutoDjMode) => void;
+  setAutoDjCount: (count: number) => void;
+  setAutoDjTrigger: (count: number) => void;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
@@ -213,6 +224,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [lastPath, setLastPathState] = useState("");
   const [sessionReady, setSessionReady] = useState(false);
   const [artworkUrl, setArtworkUrl] = useState<string | undefined>();
+  const [sleepTimerEndsAt, setSleepTimerEndsAt] = useState<number | null>(null);
+  const sleepTimerEndsAtRef = useRef<number | null>(null);
+  const [autoDjEnabled, setAutoDjEnabledState] = useState(false);
+  const [autoDjMode, setAutoDjModeState] = useState<AutoDjMode>("similar");
+  const [autoDjCount, setAutoDjCountState] = useState(5);
+  const [autoDjTrigger, setAutoDjTriggerState] = useState(2);
+  const autoDjLoadingRef = useRef(false);
+  sleepTimerEndsAtRef.current = sleepTimerEndsAt;
 
   const current = currentIndex >= 0 ? queue[currentIndex] ?? null : null;
   const upcoming = currentIndex >= 0 ? queue.slice(currentIndex + 1) : [];
@@ -335,6 +354,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       void persistSession(true);
     };
     const onEnded = () => {
+      if (sleepTimerEndsAtRef.current != null && Date.now() >= sleepTimerEndsAtRef.current) {
+        audio.pause();
+        sleepTimerEndsAtRef.current = null;
+        setSleepTimerEndsAt(null);
+        return;
+      }
       if (repeatRef.current === "one") {
         audio.currentTime = 0;
         void audio.play();
@@ -359,6 +384,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       audioRef.current = null;
     };
   }, [advanceFrom, persistSession]);
+
+  useEffect(() => {
+    if (sleepTimerEndsAt == null) return;
+    const remaining = Math.max(0, sleepTimerEndsAt - Date.now());
+    const timer = window.setTimeout(() => {
+      audioRef.current?.pause();
+      sleepTimerEndsAtRef.current = null;
+      setSleepTimerEndsAt(null);
+    }, remaining);
+    return () => window.clearTimeout(timer);
+  }, [sleepTimerEndsAt]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
@@ -515,6 +551,49 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     },
     [auth],
   );
+
+  const setSleepTimer = useCallback((minutes: number | null) => {
+    const endsAt = minutes == null ? null : Date.now() + minutes * 60_000;
+    sleepTimerEndsAtRef.current = endsAt;
+    setSleepTimerEndsAt(endsAt);
+  }, []);
+
+  const appendAutoDj = useCallback(async () => {
+    if (!auth || !autoDjEnabled || autoDjLoadingRef.current || queueRef.current.length === 0) return;
+    if (queueRef.current.length - currentIndexRef.current - 1 > autoDjTrigger) return;
+    const track = queueRef.current[currentIndexRef.current];
+    if (!track) return;
+    autoDjLoadingRef.current = true;
+    try {
+      let songs: Song[];
+      if (autoDjMode === "similar" && track.id) {
+        try {
+          songs = await getSimilarSongs(auth, track.id, autoDjCount * 3);
+        } catch {
+          songs = await getRandomSongs(auth, autoDjCount * 3);
+        }
+      } else {
+        songs = await getRandomSongs(auth, autoDjCount * 3);
+      }
+      const existing = new Set(queueRef.current.map((item) => item.id));
+      const additions = await Promise.all(songs
+        .filter((song) => !existing.has(song.id))
+        .slice(0, autoDjCount)
+        .map(async (song) => ({
+          ...song,
+          coverUrl: await coverArtUrl(auth, song.coverArt, 300),
+        })));
+      if (additions.length) setQueue((previous) => [...previous, ...additions]);
+    } catch {
+      // Auto DJ is deliberately silent when a server lacks recommendation support.
+    } finally {
+      autoDjLoadingRef.current = false;
+    }
+  }, [auth, autoDjEnabled, autoDjMode, autoDjCount, autoDjTrigger]);
+
+  useEffect(() => {
+    void appendAutoDj();
+  }, [appendAutoDj, currentIndex, queue.length]);
 
   useEffect(() => {
     if (currentIndex < 0 || !queue[currentIndex]) return;
@@ -766,6 +845,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setLastPathState(path);
   }, []);
 
+  const setAutoDjEnabled = useCallback((enabled: boolean) => setAutoDjEnabledState(enabled), []);
+  const setAutoDjMode = useCallback((mode: AutoDjMode) => setAutoDjModeState(mode), []);
+  const setAutoDjCount = useCallback((count: number) => setAutoDjCountState(Math.max(1, Math.min(20, count))), []);
+  const setAutoDjTrigger = useCallback((count: number) => setAutoDjTriggerState(Math.max(1, Math.min(5, count))), []);
+
   // Larger art than the player bar uses, for the Windows media flyout.
   useEffect(() => {
     let cancelled = false;
@@ -836,6 +920,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       cycleLyricsMode,
       setLyricsMode,
       setLastPath,
+      sleepTimerEndsAt,
+      setSleepTimer,
+      autoDjEnabled,
+      autoDjMode,
+      autoDjCount,
+      autoDjTrigger,
+      setAutoDjEnabled,
+      setAutoDjMode,
+      setAutoDjCount,
+      setAutoDjTrigger,
     }),
     [
       queue,
@@ -875,6 +969,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       cycleLyricsMode,
       setLyricsMode,
       setLastPath,
+      sleepTimerEndsAt,
+      setSleepTimer,
+      autoDjEnabled,
+      autoDjMode,
+      autoDjCount,
+      autoDjTrigger,
+      setAutoDjEnabled,
+      setAutoDjMode,
+      setAutoDjCount,
+      setAutoDjTrigger,
     ],
   );
 

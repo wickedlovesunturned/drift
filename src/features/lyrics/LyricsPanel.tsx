@@ -1,11 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { usePlayer } from "../player/PlayerContext";
 import { useSettings } from "../settings/SettingsContext";
 import {
   fetchTrackLyrics,
-  loadLyricsOffset,
-  saveLyricsOffset,
   type TrackLyrics,
 } from "../../lib/lyrics";
 import { activeLineIndex } from "../../lib/lrc";
@@ -22,7 +20,6 @@ export function LyricsPanel({ compact, fullscreen, onClose }: LyricsPanelProps) 
   const { current, playing, positionMs, seek } = usePlayer();
   const [lyrics, setLyrics] = useState<TrackLyrics | null>(null);
   const [loading, setLoading] = useState(false);
-  const [offsetMs, setOffsetMs] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const manualScrollUntil = useRef(0);
 
@@ -31,7 +28,6 @@ export function LyricsPanel({ compact, fullscreen, onClose }: LyricsPanelProps) 
       setLyrics(null);
       return;
     }
-    setOffsetMs(loadLyricsOffset(current.id));
     let active = true;
     setLoading(true);
     void fetchTrackLyrics(
@@ -40,6 +36,7 @@ export function LyricsPanel({ compact, fullscreen, onClose }: LyricsPanelProps) 
       current.title ?? "",
       current.album ?? "",
       current.duration,
+      current.id,
     )
       .then((result) => {
         if (active) setLyrics(result);
@@ -52,27 +49,23 @@ export function LyricsPanel({ compact, fullscreen, onClose }: LyricsPanelProps) 
     };
   }, [auth, current?.id, current?.artist, current?.title, current?.album, current?.duration]);
 
+  const displaySynced = useMemo(() => lyrics?.synced ?? [], [lyrics]);
+
   const activeIdx =
-    lyrics?.synced && lyrics.synced.length > 0
-      ? activeLineIndex(lyrics.synced, positionMs, offsetMs)
+    displaySynced && displaySynced.length > 0
+      ? activeLineIndex(displaySynced, positionMs)
       : -1;
+  const lyricTime = positionMs;
 
   useEffect(() => {
-    if (!lyrics?.synced || activeIdx < 0) return;
+    if (!displaySynced || activeIdx < 0) return;
     if (Date.now() < manualScrollUntil.current) return;
     const el = scrollRef.current?.querySelector(`[data-line="${activeIdx}"]`);
     el?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [activeIdx, lyrics?.synced]);
+  }, [activeIdx, displaySynced]);
 
   function onScroll() {
     manualScrollUntil.current = Date.now() + 4000;
-  }
-
-  function adjustOffset(delta: number) {
-    if (!current) return;
-    const next = offsetMs + delta;
-    setOffsetMs(next);
-    saveLyricsOffset(current.id, next);
   }
 
   if (!current) {
@@ -105,17 +98,6 @@ export function LyricsPanel({ compact, fullscreen, onClose }: LyricsPanelProps) 
           </div>
         </div>
         <div className="lyrics-header-actions">
-          {lyrics?.synced && (
-            <div className="lyrics-offset">
-              <button type="button" className="btn tiny secondary" onClick={() => adjustOffset(-500)}>
-                −0.5s
-              </button>
-              <span className="muted">Sync</span>
-              <button type="button" className="btn tiny secondary" onClick={() => adjustOffset(500)}>
-                +0.5s
-              </button>
-            </div>
-          )}
           {onClose && (
             <button type="button" className="icon-btn" onClick={onClose} aria-label="Close lyrics" title="Close">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -136,17 +118,31 @@ export function LyricsPanel({ compact, fullscreen, onClose }: LyricsPanelProps) 
         {!loading && !lyrics && (
           <p className="muted lyrics-status">No lyrics found for this track.</p>
         )}
-        {!loading && lyrics?.synced && lyrics.synced.length > 0 && (
+        {!loading && displaySynced.length > 0 && (
           <div className="lyrics-sync">
-            {lyrics.synced.map((line, i) => (
+            {displaySynced.map((line, i) => (
               <button
                 key={`${line.timeMs}-${i}`}
                 type="button"
                 data-line={i}
                 className={`lyrics-line${i === activeIdx ? " active" : i < activeIdx ? " past" : ""}`}
-                onClick={() => seek(line.timeMs - offsetMs)}
+                onClick={() => seek(line.timeMs)}
               >
-                {line.text}
+                {line.cues?.length
+                  ? line.cues.map((cue, cueIndex, cues) => {
+                      const nextCue = cues[cueIndex + 1];
+                      const isPast = lyricTime >= (cue.endMs ?? nextCue?.timeMs ?? Number.POSITIVE_INFINITY);
+                      const isActive = lyricTime >= cue.timeMs && !isPast;
+                      return (
+                        <span
+                          key={`${cue.timeMs}-${cueIndex}`}
+                          className={`lyrics-cue${isPast ? " past" : isActive ? " active" : ""}`}
+                        >
+                          {cue.text}
+                        </span>
+                      );
+                    })
+                  : line.text}
               </button>
             ))}
           </div>
@@ -164,8 +160,10 @@ export function LyricsPanel({ compact, fullscreen, onClose }: LyricsPanelProps) 
 
       {lyrics && (
         <footer className="lyrics-footer muted">
-          {lyrics.synced?.length
-            ? "Synchronized · click a line to seek"
+          {displaySynced.length
+            ? lyrics.synced?.length
+              ? "Auto-synced lyrics · click a line to seek"
+              : "Lyrics"
             : "Lyrics"}{" "}
           · {lyrics.source === "server" ? "Navidrome" : "LRCLIB"}
           {playing ? "" : " · paused"}
