@@ -3,6 +3,9 @@ import { Cover } from "../library/Cover";
 import { useFavorites } from "../library/FavoritesContext";
 import { APP_NAME } from "../../lib/constants";
 import { NowPlayingMenu } from "./NowPlayingMenu";
+import { SleepTimer } from "./SleepTimer";
+import { AutoDj } from "./AutoDj";
+import { DevicePicker } from "./DevicePicker";
 import {
   IconNext,
   IconPause,
@@ -140,6 +143,9 @@ export function PlayerBar() {
       </div>
 
       <div className="player-utils">
+        <AutoDj />
+        <DevicePicker />
+        <SleepTimer />
         <div
           className="volume"
           onWheel={(e) => adjustVolume(e.deltaY < 0 ? 1 : -1)}

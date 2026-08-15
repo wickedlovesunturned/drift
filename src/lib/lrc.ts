@@ -3,12 +3,21 @@
 export interface LrcLine {
   timeMs: number;
   text: string;
+  cues?: LrcCue[];
+}
+
+export interface LrcCue {
+  timeMs: number;
+  endMs?: number;
+  text: string;
 }
 
 const LINE_RE = /^\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]\s*(.*)$/;
 
 export function parseLrc(raw: string): LrcLine[] {
   const lines: LrcLine[] = [];
+  const offsetMatch = raw.match(/^\[offset:\s*([+-]?\d+)\]/im);
+  const offsetMs = offsetMatch ? Number(offsetMatch[1]) : 0;
   for (const row of raw.split(/\r?\n/)) {
     const trimmed = row.trim();
     if (!trimmed) continue;
@@ -23,7 +32,7 @@ export function parseLrc(raw: string): LrcLine[] {
       const frac = match[3] ? Number(match[3].padEnd(3, "0")) : 0;
       const text = match[4]?.trim() ?? "";
       if (!text) continue;
-      lines.push({ timeMs: mins * 60_000 + secs * 1000 + frac, text });
+      lines.push({ timeMs: Math.max(0, mins * 60_000 + secs * 1000 + frac + offsetMs), text });
     }
   }
 
